@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restaurante_app/core/config/supabase_config.dart';
+import 'package:restaurante_app/core/layout/main_layout.dart';
 import 'package:restaurante_app/core/theme/app_theme.dart';
-import 'package:restaurante_app/core/layout/main_layout.dart'; // Importamos el layout
 
-void main() {
-  runApp(const RestauranteApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicialización tolerante a fallos de Supabase
+  await SupabaseConfig.initialize();
+
+  runApp(
+    const ProviderScope(
+      child: RestauranteApp(),
+    ),
+  );
 }
 
 class RestauranteApp extends StatelessWidget {
@@ -14,8 +25,8 @@ class RestauranteApp extends StatelessWidget {
     return MaterialApp(
       title: 'Restaurante App',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme, // Ya tiene Material 3 activado
-      home: const MainLayout(), // <-- AHORA CARGAMOS MAINLAYOUT
+      theme: AppTheme.lightTheme,
+      home: const MainLayout(),
     );
   }
 }

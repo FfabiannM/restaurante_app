@@ -1,0 +1,170 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restaurante_app/features/reservas/data/supabase_reservation_repository.dart';
+import 'package:restaurante_app/features/reservas/domain/holiday_entity.dart';
+import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
+import 'package:restaurante_app/features/reservas/domain/reservation_repository.dart';
+import 'package:restaurante_app/features/reservas/domain/usecases/reservation_policy.dart';
+
+/// Proveedor del repositorio de reservas
+final reservationRepositoryProvider = Provider<ReservationRepository>((ref) {
+  return SupabaseReservationRepository();
+});
+
+/// Proveedor de la instancia del caso de uso de políticas
+final reservationPolicyUseCaseProvider = Provider<ReservationPolicy>((ref) {
+  return ReservationPolicy();
+});
+
+/// Notifier para la fecha seleccionada en el calendario
+class SelectedDateNotifier extends Notifier<DateTime> {
+  @override
+  DateTime build() => DateTime.now();
+
+  @override
+  set state(DateTime value) => super.state = value;
+
+  void selectDate(DateTime date) {
+    state = date;
+  }
+}
+
+final selectedDateProvider =
+    NotifierProvider<SelectedDateNotifier, DateTime>(SelectedDateNotifier.new);
+
+/// Notifier para la hora actual del sistema
+class CurrentTimeNotifier extends Notifier<DateTime> {
+  @override
+  DateTime build() => DateTime.now();
+
+  @override
+  set state(DateTime value) => super.state = value;
+
+  void setTime(DateTime time) {
+    state = time;
+  }
+}
+
+final currentTimeProvider =
+    NotifierProvider<CurrentTimeNotifier, DateTime>(CurrentTimeNotifier.new);
+
+/// Lista de feriados cargados desde Supabase / locales
+final holidaysProvider = FutureProvider<List<Holiday>>((ref) async {
+  final repo = ref.watch(reservationRepositoryProvider);
+  return repo.getHolidays();
+});
+
+/// Estado consolidado de la política para la fecha actualmente seleccionada
+class ReservationPolicyState {
+  final bool canReserve;
+  final String reserveReason;
+  final bool canCancel;
+  final String cancelReason;
+
+  const ReservationPolicyState({
+    required this.canReserve,
+    required this.reserveReason,
+    required this.canCancel,
+    required this.cancelReason,
+  });
+}
+
+/// Proveedor que evalúa reactivamente si la fecha seleccionada puede ser reservada o cancelada
+final reservationPolicyProvider = Provider<ReservationPolicyState>((ref) {
+  final policyUseCase = ref.watch(reservationPolicyUseCaseProvider);
+  final selectedDate = ref.watch(selectedDateProvider);
+  final currentTime = ref.watch(currentTimeProvider);
+  final holidaysAsync = ref.watch(holidaysProvider);
+
+  final holidays = holidaysAsync.value ?? Holiday.defaultHolidays;
+
+  final reserveCheck = policyUseCase.checkCanReserve(
+    selectedDate,
+    currentTime,
+    holidays: holidays,
+  );
+
+  final cancelCheck = policyUseCase.checkCanCancel(
+    selectedDate,
+    currentTime,
+  );
+
+  return ReservationPolicyState(
+    canReserve: reserveCheck.isAllowed,
+    reserveReason: reserveCheck.message,
+    canCancel: cancelCheck.isAllowed,
+    cancelReason: cancelCheck.message,
+  );
+});
+
+/// Notifier para la gestión reactiva de las reservas del usuario
+class UserReservationsNotifier extends Notifier<List<Reservation>> {
+  @override
+  List<Reservation> build() {
+    Future.microtask(() => loadReservations());
+    return [];
+  }
+
+  Future<void> loadReservations({String userId = 'demo-user-123'}) async {
+    try {
+      final repo = ref.read(reservationRepositoryProvider);
+      final list = await repo.getUserReservations(userId);
+      state = list;
+    } catch (_) {
+      // Manejo silencioso en caso de error
+    }
+  }
+
+  Future<bool> createReservation({
+    required DateTime date,
+    String? dishId,
+    String? dishName,
+    String? notes,
+    String type = 'diaria',
+    String userName = 'Empleado',
+    String userId = 'demo-user-123',
+  }) async {
+    try {
+      final repo = ref.read(reservationRepositoryProvider);
+      final newRes = Reservation(
+        id: 'res-${DateTime.now().millisecondsSinceEpoch}',
+        userId: userId,
+        userName: userName,
+        dishId: dishId,
+        dishName: dishName ?? 'Almuerzo Completo del Día',
+        date: date,
+        type: type,
+        status: 'confirmada',
+        notes: notes,
+        createdAt: DateTime.now(),
+      );
+
+      await repo.createReservation(newRes);
+      state = [newRes, ...state];
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> cancelReservation(String reservationId) async {
+    try {
+      final repo = ref.read(reservationRepositoryProvider);
+      await repo.cancelReservation(reservationId);
+      state = state.map((r) {
+        if (r.id == reservationId) {
+          return r.copyWith(status: 'cancelada');
+        }
+        return r;
+      }).toList();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+}
+
+/// Proveedor de las reservas del usuario
+final userReservationsProvider =
+    NotifierProvider<UserReservationsNotifier, List<Reservation>>(
+  UserReservationsNotifier.new,
+);

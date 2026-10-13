@@ -1,0 +1,65 @@
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class SupabaseConfig {
+  /// URL del proyecto Supabase.
+  /// Puede ser configurada mediante variables de entorno (--dart-define=SUPABASE_URL=...)
+  /// o editando esta constante con tu URL de Supabase.
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://demo-restaurante.supabase.co',
+  );
+
+  /// Clave anónima pública de Supabase (anon public key).
+  /// Puede configurarse mediante --dart-define=SUPABASE_ANON_KEY=...
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.demo_anon_key_for_restaurante_app',
+  );
+
+  static bool _isInitialized = false;
+
+  /// Retorna si Supabase está activo y conectado.
+  static bool get isInitialized => _isInitialized;
+
+  /// Retorna el cliente Supabase si está disponible.
+  static SupabaseClient? get client {
+    if (_isInitialized) {
+      try {
+        return Supabase.instance.client;
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /// Inicializa Supabase de manera tolerante a fallos.
+  /// Si la URL no es válida o no hay conexión, la app inicia en modo demostración/híbrido.
+  static Future<void> initialize() async {
+    try {
+      if (supabaseUrl.isNotEmpty &&
+          supabaseUrl.startsWith('https://') &&
+          !supabaseUrl.contains('demo-restaurante')) {
+        await Supabase.initialize(
+          url: supabaseUrl,
+          publishableKey: supabaseAnonKey,
+          authOptions: const FlutterAuthClientOptions(
+            authFlowType: AuthFlowType.pkce,
+          ),
+        );
+        _isInitialized = true;
+        debugPrint('✅ Supabase inicializado correctamente.');
+      } else {
+        debugPrint(
+          'ℹ️ Supabase no configurado con credenciales reales. Iniciando en modo local/demo.',
+        );
+        _isInitialized = false;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error al inicializar Supabase ($e). Modo local activo.');
+      _isInitialized = false;
+    }
+  }
+}

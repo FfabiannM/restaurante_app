@@ -1,30 +1,112 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restaurante_app/main.dart';
+import 'package:restaurante_app/features/reservas/domain/holiday_entity.dart';
+import 'package:restaurante_app/features/reservas/domain/usecases/reservation_policy.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('ReservationPolicy Business Rules', () {
+    final policy = ReservationPolicy();
+    final holiday = Holiday(
+      id: 'h1',
+      date: DateTime(2026, 5, 1),
+      name: 'Día del Trabajo',
+    );
+    final holidays = [holiday];
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('Regla 1: No se puede reservar en días pasados', () {
+      final now = DateTime(2026, 10, 12, 8, 0); // Lunes 8:00 AM
+      final pastDate = DateTime(2026, 10, 11); // Ayer
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+      final result = policy.checkCanReserve(pastDate, now, holidays: holidays);
+      expect(result.isAllowed, isFalse);
+      expect(result.message, contains('pasadas'));
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('Regla 2: No se puede reservar en fines de semana (sábado/domingo)', () {
+      final now = DateTime(2026, 10, 12, 8, 0); // Lunes 8:00 AM
+      final saturday = DateTime(2026, 10, 17); // Sábado
+
+      final result = policy.checkCanReserve(saturday, now, holidays: holidays);
+      expect(result.isAllowed, isFalse);
+      expect(result.message, contains('fines de semana'));
+    });
+
+    test('Regla 3: No se puede reservar en feriados oficiales', () {
+      final now = DateTime(2026, 4, 20, 8, 0);
+      final holidayDate = DateTime(2026, 5, 1); // Feriado Día del Trabajo
+
+      final result =
+          policy.checkCanReserve(holidayDate, now, holidays: holidays);
+      expect(result.isAllowed, isFalse);
+      expect(result.message, contains('Día del Trabajo'));
+    });
+
+    test('Regla 4: Mismo día antes de las 9:00 AM -> Permitido reservar', () {
+      final now = DateTime(2026, 10, 13, 8, 45); // Martes 8:45 AM
+      final today = DateTime(2026, 10, 13);
+
+      final result = policy.checkCanReserve(today, now, holidays: holidays);
+      expect(result.isAllowed, isTrue);
+    });
+
+    test('Regla 4: Mismo día exactamente a las 9:00 AM -> Permitido reservar', () {
+      final now = DateTime(2026, 10, 13, 9, 0); // Martes 9:00 AM en punto
+      final today = DateTime(2026, 10, 13);
+
+      final result = policy.checkCanReserve(today, now, holidays: holidays);
+      expect(result.isAllowed, isTrue);
+    });
+
+    test('Regla 4: Mismo día después de las 9:00 AM (9:01) -> Bloqueado', () {
+      final now = DateTime(2026, 10, 13, 9, 1); // Martes 9:01 AM
+      final today = DateTime(2026, 10, 13);
+
+      final result = policy.checkCanReserve(today, now, holidays: holidays);
+      expect(result.isAllowed, isFalse);
+      expect(result.message, contains('9:00 AM'));
+    });
+
+    test('Regla Cancelación: Mismo día antes de las 8:59 AM -> Permitido', () {
+      final now = DateTime(2026, 10, 13, 8, 30);
+      final today = DateTime(2026, 10, 13);
+
+      final result = policy.checkCanCancel(today, now);
+      expect(result.isAllowed, isTrue);
+    });
+
+    test('Regla Cancelación: Mismo día a partir de las 9:00 AM -> Bloqueado', () {
+      final now = DateTime(2026, 10, 13, 9, 0);
+      final today = DateTime(2026, 10, 13);
+
+      final result = policy.checkCanCancel(today, now);
+      expect(result.isAllowed, isFalse);
+      expect(result.message, contains('8:59 AM'));
+    });
+
+    test('Regla Días Futuros: Días laborables futuros siempre permitidos', () {
+      final now = DateTime(2026, 10, 13, 14, 0); // Martes 2:00 PM
+      final futureWorkday = DateTime(2026, 10, 14); // Miércoles
+
+      final result =
+          policy.checkCanReserve(futureWorkday, now, holidays: holidays);
+      expect(result.isAllowed, isTrue);
+    });
+  });
+
+  testWidgets('App widget smoke test', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: RestauranteApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verifica que la barra de navegación y título aparezcan
+    expect(find.text('Menú del Día'), findsOneWidget);
+    expect(find.text('Menú'), findsOneWidget);
+    expect(find.text('Calendario'), findsOneWidget);
+    expect(find.text('Reservas'), findsOneWidget);
+    expect(find.text('Perfil'), findsOneWidget);
   });
 }
