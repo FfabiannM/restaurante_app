@@ -57,7 +57,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final userReservations = ref.watch(userReservationsProvider);
 
     // Ver si el usuario ya tiene reserva en la fecha seleccionada
-    final existingReservation = userReservations.cast<Reservation?>().firstWhere(
+    final existingReservation = userReservations
+        .cast<Reservation?>()
+        .firstWhere(
           (r) =>
               r != null &&
               AppDateUtils.isSameDay(r.date, selectedDate) &&
@@ -69,7 +71,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       (h) => AppDateUtils.isSameDay(h.date, selectedDate),
     );
     final holidayObj = isHoliday
-        ? holidays.firstWhere((h) => AppDateUtils.isSameDay(h.date, selectedDate))
+        ? holidays.firstWhere(
+            (h) => AppDateUtils.isSameDay(h.date, selectedDate),
+          )
         : null;
 
     return Scaffold(
@@ -88,10 +92,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
             Text(
               'Selecciona un día hábil en el calendario',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.white70,
-              ),
+              style: TextStyle(fontSize: 12, color: Colors.white70),
             ),
           ],
         ),
@@ -149,10 +150,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ),
                 calendarStyle: CalendarStyle(
                   todayDecoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: 0.4),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.4),
                     shape: BoxShape.circle,
                   ),
                   selectedDecoration: BoxDecoration(
@@ -163,10 +163,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ),
                 calendarBuilders: CalendarBuilders(
                   markerBuilder: (context, date, events) {
-                    final hasRes = userReservations.any((r) =>
-                        AppDateUtils.isSameDay(r.date, date) && r.isConfirmed);
+                    final hasRes = userReservations.any(
+                      (r) =>
+                          AppDateUtils.isSameDay(r.date, date) && r.isConfirmed,
+                    );
                     final isHol = holidays.any(
-                        (h) => AppDateUtils.isSameDay(h.date, date));
+                      (h) => AppDateUtils.isSameDay(h.date, date),
+                    );
 
                     if (hasRes || isHol) {
                       return Row(
@@ -234,8 +237,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   color: isHoliday
                       ? Colors.amber.shade400
                       : policy.canReserve
-                          ? Colors.green.shade300
-                          : Colors.red.shade200,
+                      ? Colors.green.shade300
+                      : Colors.red.shade200,
                   width: 1.5,
                 ),
               ),
@@ -248,13 +251,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         isHoliday
                             ? Icons.celebration
                             : policy.canReserve
-                                ? Icons.check_circle
-                                : Icons.info_outline,
+                            ? Icons.check_circle
+                            : Icons.info_outline,
                         color: isHoliday
                             ? Colors.amber.shade800
                             : policy.canReserve
-                                ? Colors.green
-                                : Colors.red,
+                            ? Colors.green
+                            : Colors.red,
                         size: 22,
                       ),
                       const SizedBox(width: 8),
@@ -279,8 +282,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.bookmark_added,
-                              color: Colors.blue, size: 20),
+                          const Icon(
+                            Icons.bookmark_added,
+                            color: Colors.blue,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -301,15 +307,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     isHoliday
                         ? 'Feriado: ${holidayObj?.name ?? 'Feriado Oficial'}. Restaurante no atiende.'
                         : policy.canReserve
-                            ? 'Día habilitado para reserva de almuerzo institucional.'
-                            : policy.reserveReason,
+                        ? 'Día habilitado para reserva de almuerzo institucional.'
+                        : policy.reserveReason,
                     style: TextStyle(
                       fontSize: 13,
                       color: isHoliday
                           ? Colors.amber.shade900
                           : policy.canReserve
-                              ? Colors.green.shade800
-                              : Colors.red.shade800,
+                          ? Colors.green.shade800
+                          : Colors.red.shade800,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -374,7 +380,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     TextField(
                       controller: _notesController,
                       decoration: InputDecoration(
-                        hintText: 'Observaciones (ej. Sin ensalada, para llevar)',
+                        hintText:
+                            'Observaciones (ej. Sin ensalada, para llevar)',
                         prefixIcon: const Icon(Icons.note_alt_outlined),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -395,11 +402,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 height: 52,
                 child: OutlinedButton.icon(
                   onPressed: policy.canCancel
-                      ? () => _handleCancellation(context, existingReservation.id)
-                      : () => _showPolicyError(
-                            context,
-                            policy.cancelReason,
-                          ),
+                      ? () =>
+                            _handleCancellation(context, existingReservation.id)
+                      : () => _showPolicyError(context, policy.cancelReason),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(
                       color: policy.canCancel ? Colors.red : Colors.grey,
@@ -433,11 +438,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   onPressed: policy.canReserve
                       ? () => _handleReservation(context, selectedDate)
                       : () => _showPolicyError(
-                            context,
-                            isHoliday
-                                ? 'No se puede reservar en días feriados'
-                                : policy.reserveReason,
-                          ),
+                          context,
+                          isHoliday
+                              ? 'No se puede reservar en días feriados'
+                              : policy.reserveReason,
+                        ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: policy.canReserve
                         ? Theme.of(context).colorScheme.primary
