@@ -1,8 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restaurante_app/features/auth/data/supabase_auth_repository.dart';
+import 'package:restaurante_app/features/auth/domain/user_profile.dart';
+import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:restaurante_app/main.dart';
 import 'package:restaurante_app/features/reservas/domain/holiday_entity.dart';
 import 'package:restaurante_app/features/reservas/domain/usecases/reservation_policy.dart';
+
+class TestAuthNotifier extends AuthNotifier {
+  final UserProfile? initialUser;
+  TestAuthNotifier([this.initialUser]);
+
+  @override
+  UserProfile? build() => initialUser;
+}
 
 void main() {
   group('ReservationPolicy Business Rules', () {
@@ -94,7 +105,7 @@ void main() {
     });
   });
 
-  testWidgets('App widget smoke test', (WidgetTester tester) async {
+  testWidgets('App muestra LoginScreen por defecto cuando no hay sesión iniciada', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
         child: RestauranteApp(),
@@ -102,7 +113,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Verifica que la barra de navegación y título aparezcan
+    expect(find.text('Iniciar Sesión'), findsWidgets);
+    expect(find.text('Correo electrónico'), findsOneWidget);
+    expect(find.text('Contraseña'), findsOneWidget);
+    expect(find.text('Ingresar al Sistema'), findsOneWidget);
+  });
+
+  testWidgets('App muestra MainLayout cuando usuario está autenticado como Empleado', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authProvider.overrideWith(
+            () => TestAuthNotifier(SupabaseAuthRepository.demoEmpleado),
+          ),
+        ],
+        child: const RestauranteApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
     expect(find.text('Menú del Día'), findsOneWidget);
     expect(find.text('Menú'), findsOneWidget);
     expect(find.text('Calendario'), findsOneWidget);

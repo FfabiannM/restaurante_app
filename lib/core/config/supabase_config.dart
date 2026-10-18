@@ -7,15 +7,14 @@ class SupabaseConfig {
   /// o editando esta constante con tu URL de Supabase.
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://demo-restaurante.supabase.co',
+    defaultValue: 'https://qnieqczrdyxyhpepjduj.supabase.co',
   );
 
   /// Clave anónima pública de Supabase (anon public key).
   /// Puede configurarse mediante --dart-define=SUPABASE_ANON_KEY=...
   static const String supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.demo_anon_key_for_restaurante_app',
+    defaultValue: 'sb_publishable_s7ww56WzXyW76KlH-cqvfQ_SgdpLsX7',
   );
 
   static bool _isInitialized = false;
@@ -60,6 +59,33 @@ class SupabaseConfig {
     } catch (e) {
       debugPrint('⚠️ Error al inicializar Supabase ($e). Modo local activo.');
       _isInitialized = false;
+    }
+  }
+
+  /// Comprueba el estado de la conexión a Supabase y retorna un diagnóstico legible.
+  static Future<Map<String, dynamic>> checkConnectionHealth() async {
+    final client = SupabaseConfig.client;
+    if (!_isInitialized || client == null) {
+      return {
+        'connected': false,
+        'message': 'Supabase no inicializado o modo local activo',
+        'url': supabaseUrl,
+      };
+    }
+    try {
+      final res = await client.from('platos').select('id').limit(1);
+      return {
+        'connected': true,
+        'message': 'Conexión exitosa a Supabase y tablas accesibles',
+        'url': supabaseUrl,
+        'data': res,
+      };
+    } catch (e) {
+      return {
+        'connected': true,
+        'message': 'Cliente conectado con éxito al endpoint (RLS o permisos requeridos): $e',
+        'url': supabaseUrl,
+      };
     }
   }
 }

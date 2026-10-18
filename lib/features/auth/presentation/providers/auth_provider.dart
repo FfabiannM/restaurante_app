@@ -57,6 +57,18 @@ class AuthNotifier extends Notifier<UserProfile?> {
     state = null;
   }
 
+  Future<bool> updatePassword(String newPassword) async {
+    try {
+      final repo = ref.read(authRepositoryProvider);
+      await repo.updatePassword(newPassword);
+      // Requisito crítico: La actualización de contraseña no altera los datos
+      // del perfil ni la sesión del usuario para garantizar la persistencia en la BD.
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void setDemoUser(UserProfile demoUser) {
     final repo = ref.read(authRepositoryProvider);
     repo.switchDemoUser(demoUser);

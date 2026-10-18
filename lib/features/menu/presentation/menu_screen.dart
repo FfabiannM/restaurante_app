@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:restaurante_app/features/menu/data/supabase_menu_repository.dart';
+import 'package:restaurante_app/features/menu/domain/daily_menu_entity.dart';
+import 'package:restaurante_app/features/menu/domain/daily_menu_policy.dart';
 import 'package:restaurante_app/features/menu/domain/menu_entity.dart';
 import 'package:restaurante_app/features/menu/domain/menu_repository.dart';
 
@@ -18,15 +20,18 @@ class MenuScreen extends StatefulWidget {
 class _MenuScreenState extends State<MenuScreen> {
   final MenuRepository _repository = SupabaseMenuRepository();
   List<Dish> _dishes = [];
+  DailyMenu? _dailyMenu;
   bool _isLoading = true;
   String _selectedCategory = 'Todos';
   String _searchQuery = '';
 
   final List<String> _categories = [
     'Todos',
-    'Plato Fuerte',
+    'Entrada',
     'Sopa',
+    'Plato Fuerte',
     'Vegetariano',
+    'Especial',
     'Postre',
   ];
 
@@ -38,9 +43,12 @@ class _MenuScreenState extends State<MenuScreen> {
 
   Future<void> _loadMenu() async {
     setState(() => _isLoading = true);
+    final now = DateTime.now();
+    final structure = await _repository.getDailyMenuStructure(now);
     final dishes = await _repository.getDailyMenu();
     if (mounted) {
       setState(() {
+        _dailyMenu = structure;
         _dishes = dishes;
         _isLoading = false;
       });
@@ -62,7 +70,7 @@ class _MenuScreenState extends State<MenuScreen> {
   List<Dish> get _filteredDishes {
     return _dishes.where((dish) {
       final matchesCategory = _selectedCategory == 'Todos' ||
-          dish.category.toLowerCase() == _selectedCategory.toLowerCase();
+          dish.category.toLowerCase().contains(_selectedCategory.toLowerCase());
       final matchesSearch = dish.name
               .toLowerCase()
               .contains(_searchQuery.toLowerCase()) ||
@@ -73,6 +81,8 @@ class _MenuScreenState extends State<MenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isThursday = DailyMenuPolicy.isDessertDay(DateTime.now());
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -108,9 +118,86 @@ class _MenuScreenState extends State<MenuScreen> {
       ),
       body: Column(
         children: [
+          // Banner informativo de la estructura del menú del día
+          if (_dailyMenu != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.restaurant_menu,
+                            color: Color(0xFF2563EB), size: 20),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Menú Diario',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isThursday
+                                ? Colors.purple.withValues(alpha: 0.15)
+                                : Colors.grey.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            isThursday
+                                ? '🍰 Jueves: Postre'
+                                : '🍰 Postres solo jueves',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isThursday ? Colors.purple : Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '• Almuerzo Completo: Entrada (${_dailyMenu!.almuerzoCompleto.entrada.name}) + Sopa (${_dailyMenu!.almuerzoCompleto.sopa.name}) + Segundo (${_dailyMenu!.almuerzoCompleto.segundo.name})',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '• Opción Vegetariana: ${_dailyMenu!.platoVegetariano.name}',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '• Plato Especial: ${_dailyMenu!.platoEspecial.name}',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           // Barra de búsqueda rápida
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.95),
@@ -171,7 +258,7 @@ class _MenuScreenState extends State<MenuScreen> {
             ),
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
           // Lista de platos
           Expanded(

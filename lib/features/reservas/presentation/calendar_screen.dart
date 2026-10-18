@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:restaurante_app/core/utils/date_utils.dart';
+import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:restaurante_app/features/familiares/domain/familiar_entity.dart';
+import 'package:restaurante_app/features/familiares/presentation/providers/family_providers.dart';
 import 'package:restaurante_app/features/menu/data/supabase_menu_repository.dart';
-import 'package:restaurante_app/features/menu/domain/menu_entity.dart';
+import 'package:restaurante_app/features/menu/domain/daily_menu_entity.dart';
+import 'package:restaurante_app/features/menu/domain/daily_menu_policy.dart';
 import 'package:restaurante_app/features/reservas/domain/holiday_entity.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
 import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
@@ -17,15 +21,17 @@ class CalendarScreen extends ConsumerStatefulWidget {
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _focusedDay = DateTime.now();
-  Dish? _selectedDish;
   final TextEditingController _notesController = TextEditingController();
-  List<Dish> _availableDishes = [];
-  bool _isLoadingDishes = true;
+
+  DailyMenu? _dailyMenu;
+  String _selectedMenuType = 'Almuerzo Completo'; // 'Almuerzo Completo', 'Vegetariano', 'Especial'
+  Familiar? _selectedFamiliar; // null = para el empleado
+  bool _isLoadingMenu = true;
 
   @override
   void initState() {
     super.initState();
-    _loadDishes();
+    _loadMenuStructure(DateTime.now());
   }
 
   @override
@@ -34,15 +40,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     super.dispose();
   }
 
-  Future<void> _loadDishes() async {
-    final dishes = await SupabaseMenuRepository().getDailyMenu();
+  Future<void> _loadMenuStructure(DateTime date) async {
+    setState(() => _isLoadingMenu = true);
+    final menu = await SupabaseMenuRepository().getDailyMenuStructure(date);
     if (mounted) {
       setState(() {
-        _availableDishes = dishes;
-        if (dishes.isNotEmpty) {
-          _selectedDish = dishes.first;
-        }
-        _isLoadingDishes = false;
+        _dailyMenu = menu;
+        _isLoadingMenu = false;
       });
     }
   }
@@ -53,8 +57,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final policy = ref.watch(reservationPolicyProvider);
     final holidaysAsync = ref.watch(holidaysProvider);
     final holidays = holidaysAsync.value ?? Holiday.defaultHolidays;
-
     final userReservations = ref.watch(userReservationsProvider);
+    final currentUser = ref.watch(authProvider);
+
+    final familyAsync = ref.watch(employeeFamilyMembersProvider);
+    final familyMembers = familyAsync.value ?? [];
+
+    final isThursday = DailyMenuPolicy.isDessertDay(selectedDate);
 
     // Ver si el usuario ya tiene reserva en la fecha seleccionada
     final existingReservation = userReservations
@@ -91,7 +100,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ),
             ),
             Text(
-              'Selecciona un día hábil en el calendario',
+              'Servicio para empleado o familiares registrados',
               style: TextStyle(fontSize: 12, color: Colors.white70),
             ),
           ],
@@ -125,11 +134,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 currentDay: DateTime.now(),
                 selectedDayPredicate: (day) =>
                     AppDateUtils.isSameDay(selectedDate, day),
-                onDaySelected: (selectedDay, focusedDay) {
+                onDaySelected: (newSelectedDay, newFocusedDay) {
                   setState(() {
-                    _focusedDay = focusedDay;
+                    _focusedDay = newFocusedDay;
                   });
-                  ref.read(selectedDateProvider.notifier).state = selectedDay;
+                  ref.read(selectedDateProvider.notifier).state = newSelectedDay;
+                  _loadMenuStructure(newSelectedDay);
                 },
                 calendarFormat: CalendarFormat.month,
                 headerStyle: HeaderStyle(
@@ -150,9 +160,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ),
                 calendarStyle: CalendarStyle(
                   todayDecoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.4),
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
                     shape: BoxShape.circle,
                   ),
                   selectedDecoration: BoxDecoration(
@@ -237,8 +245,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   color: isHoliday
                       ? Colors.amber.shade400
                       : policy.canReserve
-                      ? Colors.green.shade300
-                      : Colors.red.shade200,
+                          ? Colors.green.shade300
+                          : Colors.red.shade200,
                   width: 1.5,
                 ),
               ),
@@ -251,13 +259,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         isHoliday
                             ? Icons.celebration
                             : policy.canReserve
-                            ? Icons.check_circle
-                            : Icons.info_outline,
+                                ? Icons.check_circle
+                                : Icons.info_outline,
                         color: isHoliday
                             ? Colors.amber.shade800
                             : policy.canReserve
-                            ? Colors.green
-                            : Colors.red,
+                                ? Colors.green
+                                : Colors.red,
                         size: 22,
                       ),
                       const SizedBox(width: 8),
@@ -290,7 +298,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Ya reservaste: "${existingReservation.dishName}"',
+                              'Ya reservaste: "${existingReservation.dishName}" (${existingReservation.displayName})',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
@@ -307,15 +315,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     isHoliday
                         ? 'Feriado: ${holidayObj?.name ?? 'Feriado Oficial'}. Restaurante no atiende.'
                         : policy.canReserve
-                        ? 'Día habilitado para reserva de almuerzo institucional.'
-                        : policy.reserveReason,
+                            ? 'Día habilitado para reserva de almuerzo institucional.'
+                            : policy.reserveReason,
                     style: TextStyle(
                       fontSize: 13,
                       color: isHoliday
                           ? Colors.amber.shade900
                           : policy.canReserve
-                          ? Colors.green.shade800
-                          : Colors.red.shade800,
+                              ? Colors.green.shade800
+                              : Colors.red.shade800,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -337,51 +345,169 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Selector de Beneficiario (Empleado o hasta 3 familiares)
                     const Text(
-                      'Elige tu opción de plato:',
+                      '¿Para quién es la reserva?',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 15,
+                        fontSize: 14,
+                        color: Color(0xFF1E293B),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    if (_isLoadingDishes)
-                      const Center(child: CircularProgressIndicator())
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<Familiar?>(
+                      initialValue: _selectedFamiliar,
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        prefixIcon: const Icon(Icons.people_outline),
+                      ),
+                      items: [
+                        DropdownMenuItem<Familiar?>(
+                          value: null,
+                          child: Text(
+                            'Para mí (Empleado: ${currentUser?.fullName ?? 'Usuario'})',
+                            style: const TextStyle(
+                                fontSize: 13.5, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        ...familyMembers.map((fam) {
+                          return DropdownMenuItem<Familiar?>(
+                            value: fam,
+                            child: Text(
+                              'Familiar: ${fam.displayName}',
+                              style: const TextStyle(fontSize: 13.5),
+                            ),
+                          );
+                        }),
+                      ],
+                      onChanged: (fam) {
+                        setState(() => _selectedFamiliar = fam);
+                      },
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Selector de tipo de plato
+                    const Text(
+                      'Opción de Plato:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (_isLoadingMenu)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8.0),
+                        child: Center(
+                          child: SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      )
                     else
-                      DropdownButtonFormField<Dish>(
-                        initialValue: _selectedDish,
-                        isExpanded: true,
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedMenuType,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
+                              horizontal: 14, vertical: 12),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
+                          prefixIcon: const Icon(Icons.restaurant),
                         ),
-                        items: _availableDishes.map((dish) {
-                          return DropdownMenuItem<Dish>(
-                            value: dish,
+                        items: [
+                          DropdownMenuItem(
+                            value: 'Almuerzo Completo',
                             child: Text(
-                              '${dish.name} (Bs. ${dish.price.toStringAsFixed(0)})',
+                              '🍽️ Almuerzo Completo (${_dailyMenu != null ? _dailyMenu!.almuerzoCompleto.summary : "Entrada + Sopa + Segundo"})',
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 14),
+                              style: const TextStyle(fontSize: 13),
                             ),
-                          );
-                        }).toList(),
-                        onChanged: (dish) {
-                          setState(() {
-                            _selectedDish = dish;
-                          });
+                          ),
+                          DropdownMenuItem(
+                            value: 'Vegetariano',
+                            child: Text(
+                              '🥗 Plato Vegetariano: ${_dailyMenu?.platoVegetariano.name ?? "Opción Vegetariana"}',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Especial',
+                            child: Text(
+                              '⭐ Plato Especial: ${_dailyMenu?.platoEspecial.name ?? "Opción Especial"}',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _selectedMenuType = val);
+                          }
                         },
                       ),
+
+                    const SizedBox(height: 10),
+
+                    // Nota de postre
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isThursday
+                            ? Colors.purple.withValues(alpha: 0.1)
+                            : Colors.grey.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isThursday
+                              ? Colors.purple.withValues(alpha: 0.3)
+                              : Colors.grey.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isThursday ? Icons.cake : Icons.info_outline,
+                            color: isThursday ? Colors.purple : Colors.grey.shade700,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              isThursday
+                                  ? '🍰 ¡Hoy Jueves incluye postre!: ${_dailyMenu?.postre?.name ?? "Postre tradicional"}'
+                                  : 'Nota: El postre se sirve exclusivamente los días Jueves.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isThursday
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: isThursday
+                                    ? Colors.purple.shade800
+                                    : Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
                     const SizedBox(height: 12),
+
                     TextField(
                       controller: _notesController,
                       decoration: InputDecoration(
                         hintText:
-                            'Observaciones (ej. Sin ensalada, para llevar)',
+                            'Observaciones (ej. Sin locoto, para llevar, etc.)',
                         prefixIcon: const Icon(Icons.note_alt_outlined),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -403,7 +529,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 child: OutlinedButton.icon(
                   onPressed: policy.canCancel
                       ? () =>
-                            _handleCancellation(context, existingReservation.id)
+                          _handleCancellation(context, existingReservation.id)
                       : () => _showPolicyError(context, policy.cancelReason),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(
@@ -438,11 +564,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   onPressed: policy.canReserve
                       ? () => _handleReservation(context, selectedDate)
                       : () => _showPolicyError(
-                          context,
-                          isHoliday
-                              ? 'No se puede reservar en días feriados'
-                              : policy.reserveReason,
-                        ),
+                            context,
+                            isHoliday
+                                ? 'No se puede reservar en días feriados'
+                                : policy.reserveReason,
+                          ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: policy.canReserve
                         ? Theme.of(context).colorScheme.primary
@@ -498,16 +624,42 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     BuildContext context,
     DateTime selectedDate,
   ) async {
-    final dishName = _selectedDish?.name ?? 'Almuerzo Completo del Día';
-    final dishId = _selectedDish?.id;
+    final user = ref.read(authProvider);
+    final userId = user?.id ?? 'demo-user-123';
+    final userDisplayName = user?.fullName ?? 'Empleado';
+
+    String dishDescription;
+    if (_selectedMenuType == 'Vegetariano') {
+      dishDescription =
+          'Vegetariano: ${_dailyMenu?.platoVegetariano.name ?? "Opción Vegetariana"}';
+    } else if (_selectedMenuType == 'Especial') {
+      dishDescription =
+          'Especial: ${_dailyMenu?.platoEspecial.name ?? "Opción Especial"}';
+    } else {
+      dishDescription = 'Almuerzo Completo (Entrada + Sopa + Segundo)';
+    }
+
+    if (DailyMenuPolicy.isDessertDay(selectedDate) &&
+        _dailyMenu?.postre != null) {
+      dishDescription += ' + Postre: ${_dailyMenu!.postre!.name}';
+    }
+
+    final beneficiary = _selectedFamiliar != null
+        ? _selectedFamiliar!.displayName
+        : userDisplayName;
+
     final notes = _notesController.text.trim();
 
     final success = await ref
         .read(userReservationsProvider.notifier)
         .createReservation(
           date: selectedDate,
-          dishId: dishId,
-          dishName: dishName,
+          userId: userId,
+          userName: userDisplayName,
+          familiarId: _selectedFamiliar?.id,
+          beneficiaryName: beneficiary,
+          dishId: _selectedMenuType,
+          dishName: dishDescription,
           notes: notes.isNotEmpty ? notes : null,
         );
 
@@ -518,7 +670,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '¡Reserva confirmada para ${AppDateUtils.formatShortDate(selectedDate)}!',
+            '¡Reserva confirmada para $beneficiary el ${AppDateUtils.formatShortDate(selectedDate)}!',
           ),
           backgroundColor: Colors.green.shade700,
           behavior: SnackBarBehavior.floating,

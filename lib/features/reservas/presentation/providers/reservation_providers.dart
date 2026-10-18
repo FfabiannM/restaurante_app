@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:restaurante_app/features/reservas/data/supabase_reservation_repository.dart';
 import 'package:restaurante_app/features/reservas/domain/holiday_entity.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_repository.dart';
 import 'package:restaurante_app/features/reservas/domain/usecases/reservation_policy.dart';
+import 'package:uuid/uuid.dart';
 
 /// Proveedor del repositorio de reservas
 final reservationRepositoryProvider = Provider<ReservationRepository>((ref) {
@@ -28,8 +31,9 @@ class SelectedDateNotifier extends Notifier<DateTime> {
   }
 }
 
-final selectedDateProvider =
-    NotifierProvider<SelectedDateNotifier, DateTime>(SelectedDateNotifier.new);
+final selectedDateProvider = NotifierProvider<SelectedDateNotifier, DateTime>(
+  SelectedDateNotifier.new,
+);
 
 /// Notifier para la hora actual del sistema
 class CurrentTimeNotifier extends Notifier<DateTime> {
@@ -44,8 +48,9 @@ class CurrentTimeNotifier extends Notifier<DateTime> {
   }
 }
 
-final currentTimeProvider =
-    NotifierProvider<CurrentTimeNotifier, DateTime>(CurrentTimeNotifier.new);
+final currentTimeProvider = NotifierProvider<CurrentTimeNotifier, DateTime>(
+  CurrentTimeNotifier.new,
+);
 
 /// Lista de feriados cargados desde Supabase / locales
 final holidaysProvider = FutureProvider<List<Holiday>>((ref) async {
@@ -83,10 +88,7 @@ final reservationPolicyProvider = Provider<ReservationPolicyState>((ref) {
     holidays: holidays,
   );
 
-  final cancelCheck = policyUseCase.checkCanCancel(
-    selectedDate,
-    currentTime,
-  );
+  final cancelCheck = policyUseCase.checkCanCancel(selectedDate, currentTime);
 
   return ReservationPolicyState(
     canReserve: reserveCheck.isAllowed,
@@ -100,17 +102,18 @@ final reservationPolicyProvider = Provider<ReservationPolicyState>((ref) {
 class UserReservationsNotifier extends Notifier<List<Reservation>> {
   @override
   List<Reservation> build() {
-    Future.microtask(() => loadReservations());
+    final user = ref.watch(authProvider);
+    Future.microtask(() => loadReservations(userId: user?.id ?? ''));
     return [];
   }
 
-  Future<void> loadReservations({String userId = 'demo-user-123'}) async {
+  Future<void> loadReservations({String userId = ''}) async {
     try {
       final repo = ref.read(reservationRepositoryProvider);
       final list = await repo.getUserReservations(userId);
       state = list;
-    } catch (_) {
-      // Manejo silencioso en caso de error
+    } catch (e) {
+      debugPrint('⚠️ Error cargando reservas del usuario: $e');
     }
   }
 
@@ -118,22 +121,28 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
     required DateTime date,
     String? dishId,
     String? dishName,
+    String? familiarId,
+    String? beneficiaryName,
     String? notes,
     String type = 'diaria',
+    double price = 18.0,
     String userName = 'Empleado',
     String userId = 'demo-user-123',
   }) async {
     try {
       final repo = ref.read(reservationRepositoryProvider);
       final newRes = Reservation(
-        id: 'res-${DateTime.now().millisecondsSinceEpoch}',
+        id: const Uuid().v4(),
         userId: userId,
         userName: userName,
+        familiarId: familiarId,
+        beneficiaryName: beneficiaryName ?? userName,
         dishId: dishId,
         dishName: dishName ?? 'Almuerzo Completo del Día',
         date: date,
         type: type,
         status: 'confirmada',
+        price: price,
         notes: notes,
         createdAt: DateTime.now(),
       );
@@ -144,6 +153,65 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
     } catch (e) {
       return false;
     }
+  }
+
+  Future<int> createJointReservations({
+    required DateTime date,
+    required String dishName,
+    required bool reserveForEmployee,
+    required List<String> selectedFamiliarIds,
+    required Map<String, String> familiarNames,
+    required double pricePerPerson,
+    String? notes,
+    String userName = 'Empleado',
+    String userId = 'demo-user-123',
+  }) async {
+    int count = 0;
+    final repo = ref.read(reservationRepositoryProvider);
+    final List<Reservation> createdList = [];
+
+    if (reserveForEmployee) {
+      final res = Reservation(
+        id: const Uuid().v4(),
+        userId: userId,
+        userName: userName,
+        beneficiaryName: userName,
+        dishName: dishName,
+        date: date,
+        type: pricePerPerson == 15.0 ? 'pension' : 'diaria',
+        status: 'confirmada',
+        price: pricePerPerson,
+        notes: notes,
+        createdAt: DateTime.now(),
+      );
+      await repo.createReservation(res);
+      createdList.add(res);
+      count++;
+    }
+
+    for (final famId in selectedFamiliarIds) {
+      final famName = familiarNames[famId] ?? 'Familiar';
+      final res = Reservation(
+        id: const Uuid().v4(),
+        userId: userId,
+        userName: userName,
+        familiarId: famId,
+        beneficiaryName: famName,
+        dishName: dishName,
+        date: date,
+        type: pricePerPerson == 15.0 ? 'pension' : 'diaria',
+        status: 'confirmada',
+        price: pricePerPerson,
+        notes: notes,
+        createdAt: DateTime.now(),
+      );
+      await repo.createReservation(res);
+      createdList.add(res);
+      count++;
+    }
+
+    state = [...createdList, ...state];
+    return count;
   }
 
   Future<bool> cancelReservation(String reservationId) async {
@@ -166,5 +234,5 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
 /// Proveedor de las reservas del usuario
 final userReservationsProvider =
     NotifierProvider<UserReservationsNotifier, List<Reservation>>(
-  UserReservationsNotifier.new,
-);
+      UserReservationsNotifier.new,
+    );

@@ -49,9 +49,11 @@ CREATE TABLE IF NOT EXISTS public.reservations (
     reservation_date DATE NOT NULL,
     type TEXT NOT NULL DEFAULT 'diaria' CHECK (type IN ('diaria', 'pension')),
     status TEXT NOT NULL DEFAULT 'confirmada' CHECK (status IN ('confirmada', 'cancelada', 'entregada')),
+    familiar_id TEXT,
+    beneficiary_name TEXT NOT NULL DEFAULT 'Empleado',
+    price NUMERIC(10, 2) NOT NULL DEFAULT 18.00,
     notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    CONSTRAINT unique_user_reservation_per_day UNIQUE (user_id, reservation_date)
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- 6. TABLA DE SUSCRIPCIONES MENSUALES (MODALIDAD PENSIONADO)

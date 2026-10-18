@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restaurante_app/core/utils/date_utils.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
 import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
+import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
 
 class EncargadoScreen extends ConsumerStatefulWidget {
   const EncargadoScreen({super.key});
@@ -25,34 +26,56 @@ class _EncargadoScreenState extends ConsumerState<EncargadoScreen> {
 
   Future<void> _loadOrders() async {
     setState(() => _isLoading = true);
-    final repo = ref.read(reservationRepositoryProvider);
-    final list = await repo.getAllReservationsForDate(_selectedDate);
-    if (mounted) {
-      setState(() {
-        _orders = list;
-        _isLoading = false;
-      });
+    try {
+      final repo = ref.read(reservationRepositoryProvider);
+      final list = await repo.getAllReservationsForDate(_selectedDate);
+      if (mounted) {
+        setState(() {
+          _orders = list;
+        });
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error al cargar pedidos en EncargadoScreen: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _markAsDelivered(Reservation order) async {
-    final repo = ref.read(reservationRepositoryProvider);
-    await repo.updateReservationStatus(order.id, 'entregada');
-    setState(() {
-      final index = _orders.indexWhere((o) => o.id == order.id);
-      if (index != -1) {
-        _orders[index] = order.copyWith(status: 'entregada');
-      }
-    });
+    try {
+      final repo = ref.read(reservationRepositoryProvider);
+      await repo.updateReservationStatus(order.id, 'entregada');
+      if (mounted) {
+        setState(() {
+          final index = _orders.indexWhere((o) => o.id == order.id);
+          if (index != -1) {
+            _orders[index] = order.copyWith(status: 'entregada');
+          }
+        });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Almuerzo entregado a ${order.userName}'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Almuerzo entregado a ${order.userName}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error al marcar entrega en EncargadoScreen: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo marcar la entrega: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
@@ -94,7 +117,15 @@ class _EncargadoScreenState extends ConsumerState<EncargadoScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
+            tooltip: 'Actualizar',
             onPressed: _loadOrders,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            tooltip: 'Cerrar Sesión',
+            onPressed: () {
+              ref.read(authProvider.notifier).signOut();
+            },
           ),
         ],
       ),

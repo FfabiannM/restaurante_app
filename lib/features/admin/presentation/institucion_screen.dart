@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
 
-class InstitucionScreen extends StatelessWidget {
+class InstitucionScreen extends ConsumerWidget {
   const InstitucionScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -12,7 +14,7 @@ class InstitucionScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Panel Institucional',
+              'Panel Administrador',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 20,
@@ -28,6 +30,15 @@ class InstitucionScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            tooltip: 'Cerrar Sesión',
+            onPressed: () {
+              ref.read(authProvider.notifier).signOut();
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -204,7 +215,13 @@ class InstitucionScreen extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(width: 8),
             Text(caption, style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),

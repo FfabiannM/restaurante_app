@@ -51,3 +51,13 @@ Para conectar tu instancia real de Supabase:
 1. Abre tu proyecto en [Supabase](https://supabase.com).
 2. Pega y ejecuta el contenido de `supabase_schema.sql` en el **SQL Editor**.
 3. En `lib/core/config/supabase_config.dart`, coloca tu `supabaseUrl` y tu `supabaseAnonKey` (o pásalas como `--dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...`).
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+Future<void> main() async {
+  await Supabase.initialize(
+    url: 'https://qnieqczrdyxyhpepjduj.supabase.co',
+    publishableKey: 'sb_publishable_s7ww56WzXyW76KlH-cqvfQ_SgdpLsX7',
+  );
+  runApp(MyApp());
+}
