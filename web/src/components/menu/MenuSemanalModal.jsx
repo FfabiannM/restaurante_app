@@ -28,17 +28,20 @@ export default function MenuSemanalModal({
   isOpen,
   onClose,
   platos = [],
+  menus = [],
+  initialMonday,
+  initialDayIndex = 0,
   onMenuCreated,
   showToast,
 }) {
   // Fecha base para la semana (Lunes)
-  const [startMonday, setStartMonday] = useState(() => getMondayOfWeek());
+  const [startMonday, setStartMonday] = useState(() => initialMonday || getMondayOfWeek());
   
   // Días de la semana calculados (Lunes a Viernes)
   const weekDays = useMemo(() => generateWeekDays(startMonday), [startMonday]);
 
   // Día activo seleccionado en el modal para asignar platos (0: Lunes, 1: Martes...)
-  const [activeDayIndex, setActiveDayIndex] = useState(0);
+  const [activeDayIndex, setActiveDayIndex] = useState(initialDayIndex || 0);
 
   // Mapeo de platos seleccionados por fecha: { 'YYYY-MM-DD': [platoId1, platoId2] }
   const [selectedPlatosByDate, setSelectedPlatosByDate] = useState({});
@@ -53,38 +56,87 @@ export default function MenuSemanalModal({
 
   // Estado del guardado temporal / borrador
   const [draftSavedAt, setDraftSavedAt] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // ========================================================
-  // GUARDADO TEMPORAL LOCAL (localStorage)
+  // EXTRAER DATOS EXISTENTES DESDE SUPABASE (menus)
   // ========================================================
+  const getExistingWeekData = useCallback((mondayStr) => {
+    const days = generateWeekDays(mondayStr);
+    const data = {};
+    let anyPublished = false;
+    let hasAnyMenu = false;
 
-  // Cargar borrador previo si existe al abrir el modal
+    days.forEach((d) => {
+      const m = menus.find((item) => item.fecha && item.fecha.split('T')[0] === d.dateStr);
+      if (m) {
+        hasAnyMenu = true;
+        if (m.estado_publicacion === true || m.estado_publicacion === 'Publicado') {
+          anyPublished = true;
+        }
+        data[d.dateStr] = (m.platos || []).map((p) => p.id_plato);
+      } else {
+        data[d.dateStr] = [];
+      }
+    });
+
+    return {
+      platosByDate: data,
+      isPublished: hasAnyMenu ? anyPublished : true,
+      hasAnyMenu,
+    };
+  }, [menus]);
+
+  // ========================================================
+  // INICIALIZACIÓN AL ABRIR EL MODAL
+  // ========================================================
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setIsInitialized(false);
+      return;
+    }
 
+    const targetMonday = initialMonday || getMondayOfWeek();
+    setStartMonday(targetMonday);
+    setActiveDayIndex(initialDayIndex || 0);
+    setSearchPlato('');
+    setFormError(null);
+
+    // 1. Obtener los platos guardados en el sistema para esta semana
+    const existing = getExistingWeekData(targetMonday);
+
+    // 2. Verificar si existe un borrador temporal no guardado en localStorage para ESTA misma semana
+    let loadedFromDraft = false;
     try {
-      const rawDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+      const rawDraft = localStorage.getItem(`${DRAFT_STORAGE_KEY}_${targetMonday}`);
       if (rawDraft) {
         const draft = JSON.parse(rawDraft);
-        if (draft.startMonday) setStartMonday(draft.startMonday);
-        if (draft.selectedPlatosByDate) setSelectedPlatosByDate(draft.selectedPlatosByDate);
-        if (typeof draft.publicarSemana === 'boolean') setPublicarSemana(draft.publicarSemana);
-        if (draft.savedAt) setDraftSavedAt(new Date(draft.savedAt).toLocaleTimeString());
-      } else {
-        // Inicializar estructura vacía para los días
-        const initial = {};
-        generateWeekDays(startMonday).forEach((d) => {
-          initial[d.dateStr] = [];
-        });
-        setSelectedPlatosByDate(initial);
+        if (draft.selectedPlatosByDate && Object.keys(draft.selectedPlatosByDate).length > 0) {
+          setSelectedPlatosByDate(draft.selectedPlatosByDate);
+          if (typeof draft.publicarSemana === 'boolean') setPublicarSemana(draft.publicarSemana);
+          if (draft.savedAt) setDraftSavedAt(new Date(draft.savedAt).toLocaleTimeString());
+          loadedFromDraft = true;
+        }
       }
     } catch (err) {
       console.warn('Error leyendo borrador local:', err);
     }
-  }, [isOpen]);
 
-  // Guardar en localStorage automáticamente cada vez que cambian los platos o la semana
+    // Si no hay borrador local para esta semana, cargar los datos existentes de la base de datos
+    if (!loadedFromDraft) {
+      setSelectedPlatosByDate(existing.platosByDate);
+      setPublicarSemana(existing.isPublished);
+      setDraftSavedAt(null);
+    }
+
+    setIsInitialized(true);
+  }, [isOpen, initialMonday, initialDayIndex, getExistingWeekData]);
+
+  // ========================================================
+  // GUARDADO TEMPORAL LOCAL (localStorage por semana)
+  // ========================================================
   const saveDraftLocally = useCallback(() => {
+    if (!isOpen || !startMonday || !isInitialized) return;
     try {
       const now = new Date();
       const draftData = {
@@ -93,30 +145,31 @@ export default function MenuSemanalModal({
         publicarSemana,
         savedAt: now.toISOString(),
       };
-      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
+      localStorage.setItem(`${DRAFT_STORAGE_KEY}_${startMonday}`, JSON.stringify(draftData));
       setDraftSavedAt(now.toLocaleTimeString());
     } catch (err) {
       console.warn('No se pudo guardar borrador local:', err);
     }
-  }, [startMonday, selectedPlatosByDate, publicarSemana]);
+  }, [startMonday, selectedPlatosByDate, publicarSemana, isOpen, isInitialized]);
 
   useEffect(() => {
-    if (isOpen && Object.keys(selectedPlatosByDate).length > 0) {
+    if (isOpen && isInitialized && Object.keys(selectedPlatosByDate).length > 0) {
       saveDraftLocally();
     }
-  }, [selectedPlatosByDate, startMonday, publicarSemana, isOpen, saveDraftLocally]);
+  }, [selectedPlatosByDate, startMonday, publicarSemana, isOpen, isInitialized, saveDraftLocally]);
 
-  // Limpiar borrador temporal manualmente
+  // Limpiar borrador temporal manualmente y restaurar los platos guardados en el sistema
   const handleClearDraft = () => {
-    if (window.confirm('¿Deseas descartar el borrador temporal de la semana?')) {
-      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    if (window.confirm('¿Deseas descartar los cambios temporales y restaurar los platos guardados en el sistema?')) {
+      try {
+        localStorage.removeItem(`${DRAFT_STORAGE_KEY}_${startMonday}`);
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch (err) {}
       setDraftSavedAt(null);
-      const initial = {};
-      weekDays.forEach((d) => {
-        initial[d.dateStr] = [];
-      });
-      setSelectedPlatosByDate(initial);
-      showToast?.('Borrador local descartado.');
+      const existing = getExistingWeekData(startMonday);
+      setSelectedPlatosByDate(existing.platosByDate);
+      setPublicarSemana(existing.isPublished);
+      showToast?.('Borrador descartado. Se restauraron los datos del menú guardado.');
     }
   };
 
@@ -127,9 +180,9 @@ export default function MenuSemanalModal({
 
     setSelectedPlatosByDate((prev) => {
       const currentList = prev[activeDateStr] || [];
-      const exists = currentList.includes(platoId);
+      const exists = currentList.some((id) => String(id) === String(platoId));
       const updated = exists
-        ? currentList.filter((id) => id !== platoId)
+        ? currentList.filter((id) => String(id) !== String(platoId))
         : [...currentList, platoId];
 
       return {
@@ -139,11 +192,35 @@ export default function MenuSemanalModal({
     });
   };
 
-  // Cambiar semana base (Lunes)
+  // Cambiar semana base (Lunes) desde el selector de fecha del modal
   const handleMondayChange = (e) => {
     if (!e.target.value) return;
     const newMonday = getMondayOfWeek(e.target.value);
     setStartMonday(newMonday);
+    setActiveDayIndex(0);
+
+    const existing = getExistingWeekData(newMonday);
+
+    // Revisar si hay borrador para la nueva semana seleccionada
+    let loadedFromDraft = false;
+    try {
+      const rawDraft = localStorage.getItem(`${DRAFT_STORAGE_KEY}_${newMonday}`);
+      if (rawDraft) {
+        const draft = JSON.parse(rawDraft);
+        if (draft.selectedPlatosByDate && Object.keys(draft.selectedPlatosByDate).length > 0) {
+          setSelectedPlatosByDate(draft.selectedPlatosByDate);
+          if (typeof draft.publicarSemana === 'boolean') setPublicarSemana(draft.publicarSemana);
+          if (draft.savedAt) setDraftSavedAt(new Date(draft.savedAt).toLocaleTimeString());
+          loadedFromDraft = true;
+        }
+      }
+    } catch (err) {}
+
+    if (!loadedFromDraft) {
+      setSelectedPlatosByDate(existing.platosByDate);
+      setPublicarSemana(existing.isPublished);
+      setDraftSavedAt(null);
+    }
   };
 
   // Platos filtrados por buscador dentro del modal
@@ -175,7 +252,7 @@ export default function MenuSemanalModal({
     const diasPayload = weekDays.map((d) => ({
       fecha: d.dateStr,
       estado_publicacion: publicarSemana,
-      platos_ids: selectedPlatosByDate[d.dateStr] || [],
+      platos_ids: (selectedPlatosByDate[d.dateStr] || []).map(Number),
     }));
 
     try {
@@ -183,11 +260,14 @@ export default function MenuSemanalModal({
       await menuDiaService.guardarMenuSemanal(diasPayload);
 
       // Limpiar el borrador temporal guardado en localStorage
-      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      try {
+        localStorage.removeItem(`${DRAFT_STORAGE_KEY}_${startMonday}`);
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch (err) {}
       setDraftSavedAt(null);
 
       showToast?.(
-        `Menú de la semana (${weekDays[0].displayDate} - ${weekDays[weekDays.length - 1].displayDate}) registrado exitosamente.`
+        `Menú de la semana (${weekDays[0].displayDate} - ${weekDays[weekDays.length - 1].displayDate}) guardado exitosamente.`
       );
 
       onClose();
@@ -203,12 +283,19 @@ export default function MenuSemanalModal({
   const activeDay = weekDays[activeDayIndex] || weekDays[0];
   const activeDayPlatos = selectedPlatosByDate[activeDay?.dateStr] || [];
 
+  const hasExistingData = useMemo(() => {
+    return weekDays.some((d) => {
+      const m = menus.find((item) => item.fecha && item.fecha.split('T')[0] === d.dateStr);
+      return m && (m.platos || []).length > 0;
+    });
+  }, [weekDays, menus]);
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Crear Menú Completo de la Semana"
-      subtitle="Define los platos para cada día hábil en una sola inserción atómica"
+      title={hasExistingData ? "Editar Menú de la Semana" : "Crear Menú Completo de la Semana"}
+      subtitle={hasExistingData ? "Consulta y edita los platos asignados para cada día de la semana" : "Define los platos para cada día hábil en una sola inserción atómica"}
       icon={CalendarDays}
       maxWidth="max-w-4xl"
     >
@@ -242,9 +329,11 @@ export default function MenuSemanalModal({
               <span className="text-xs font-bold text-blue-800 bg-blue-100/70 px-2.5 py-1 rounded-lg border border-blue-200 inline-block">
                 {weekDays[0]?.displayDate} al {weekDays[weekDays.length - 1]?.displayDate}
               </span>
-              <p className="text-[10px] text-slate-400 mt-0.5">
-                (Fines de semana saltan al siguiente lunes)
-              </p>
+              {hasExistingData && (
+                <span className="ml-2 text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  Semana con menú cargado
+                </span>
+              )}
             </div>
           </div>
 
@@ -253,16 +342,21 @@ export default function MenuSemanalModal({
             {draftSavedAt ? (
               <span className="inline-flex items-center text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
                 <Save className="w-3 h-3 mr-1" />
-                Borrador guardado {draftSavedAt}
+                Cambios en borrador ({draftSavedAt})
+              </span>
+            ) : hasExistingData ? (
+              <span className="inline-flex items-center text-[11px] font-medium text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+                <Check className="w-3 h-3 mr-1" />
+                Sincronizado con sistema
               </span>
             ) : (
-              <span className="text-[11px] text-slate-400">Sin borrador previo</span>
+              <span className="text-[11px] text-slate-400">Sin programación previa</span>
             )}
             <button
               type="button"
               onClick={handleClearDraft}
               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-              title="Descartar borrador local"
+              title="Restaurar a datos originales del sistema"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -272,7 +366,7 @@ export default function MenuSemanalModal({
         {/* Pestañas de Días de la Semana (Lunes a Viernes) */}
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-            Selecciona el día para asignar sus platos:
+            Selecciona el día para ver y asignar sus platos:
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {weekDays.map((d, idx) => {
@@ -325,7 +419,11 @@ export default function MenuSemanalModal({
               <h4 className="text-sm font-bold text-slate-800">
                 Platos para el {activeDay.dayName} ({activeDay.displayDate})
               </h4>
-              <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                activeDayPlatos.length > 0
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-slate-200 text-slate-600'
+              }`}>
                 {activeDayPlatos.length} seleccionados
               </span>
             </div>
@@ -351,7 +449,7 @@ export default function MenuSemanalModal({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-60 overflow-y-auto p-1">
               {filteredPlatos.map((plato) => {
-                const isSelected = activeDayPlatos.includes(plato.id_plato);
+                const isSelected = activeDayPlatos.some((id) => String(id) === String(plato.id_plato));
 
                 return (
                   <div
@@ -370,7 +468,14 @@ export default function MenuSemanalModal({
                       className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 pointer-events-none"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold truncate">{plato.nombre}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold truncate">{plato.nombre}</p>
+                        {isSelected && (
+                          <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded-full">
+                            Asignado
+                          </span>
+                        )}
+                      </div>
                       {plato.descripcion && (
                         <p className="text-[11px] text-slate-400 truncate mt-0.5">
                           {plato.descripcion}
@@ -427,7 +532,7 @@ export default function MenuSemanalModal({
             ) : (
               <>
                 <Check className="w-4 h-4" />
-                <span>Guardar Menú de la Semana</span>
+                <span>{hasExistingData ? "Actualizar Menú de la Semana" : "Guardar Menú de la Semana"}</span>
               </>
             )}
           </button>

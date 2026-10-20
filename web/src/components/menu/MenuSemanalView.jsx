@@ -145,24 +145,26 @@ export default function MenuSemanalView({
           {isAdmin && (
             <button
               type="button"
-              onClick={onOpenCreateWeekModal}
+              onClick={() => onOpenCreateWeekModal?.(selectedMonday, 0)}
               className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-xl text-xs shadow-md transition transform active:scale-95"
             >
               <CalendarPlus className="w-4 h-4" />
-              <span>Programar Semana</span>
+              <span>Programar Semana Completa</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Banner de Aviso HU5 para Empleados */}
+      {/* HU5: Banner de Información para Empleados */}
       {!isAdmin && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl p-4 flex items-center justify-between shadow-2xs">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
           <div className="flex items-center space-x-3">
-            <Clock className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <div className="p-2 bg-blue-600 text-white rounded-xl flex-shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
             <div>
-              <p className="text-xs font-bold text-blue-900">
-                Horario de visualización y reservas semanales (HU5)
+              <p className="text-xs font-bold text-blue-950">
+                Reglas de Visualización y Reserva (HU5)
               </p>
               <p className="text-[11px] text-blue-700/90 mt-0.5">
                 Los menús son publicados los domingos para toda la semana. Las reservas están disponibles hasta el viernes 08:30 AM.
@@ -238,11 +240,23 @@ export default function MenuSemanalView({
                     }`}>
                       {d.dayName}
                     </span>
-                    {isToday && (
-                      <span className="text-[10px] font-extrabold bg-blue-600 text-white px-2 py-0.5 rounded-full">
-                        Hoy
-                      </span>
-                    )}
+                    <div className="flex items-center space-x-1.5">
+                      {isToday && (
+                        <span className="text-[10px] font-extrabold bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                          Hoy
+                        </span>
+                      )}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenCreateWeekModal?.(selectedMonday, d.index)}
+                          className="text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline px-1 py-0.5 rounded hover:bg-blue-50 transition"
+                          title={`Editar platos del ${d.dayName}`}
+                        >
+                          Editar
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <h3 className="text-base font-extrabold text-slate-900 mt-0.5">
                     {d.displayDate}
@@ -284,8 +298,20 @@ export default function MenuSemanalView({
                           key={p.id_plato}
                           className="p-2.5 bg-slate-50 hover:bg-slate-100/70 rounded-xl border border-slate-100 transition text-xs"
                         >
-                          <div className="flex items-start space-x-2">
-                            <UtensilsCrossed className="w-3.5 h-3.5 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex items-start space-x-2.5">
+                            {p.imagen_url ? (
+                              <img
+                                src={p.imagen_url}
+                                alt={p.nombre}
+                                className="w-9 h-9 rounded-lg object-cover flex-shrink-0 border border-slate-200 shadow-xs"
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <UtensilsCrossed className="w-3.5 h-3.5 text-blue-600 mt-0.5 flex-shrink-0" />
+                            )}
                             <div className="min-w-0">
                               <p className="font-bold text-slate-800 leading-tight truncate">
                                 {p.nombre}

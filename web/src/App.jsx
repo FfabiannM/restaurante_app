@@ -12,18 +12,39 @@ import { UtensilsCrossed } from 'lucide-react';
 
 function AppContent() {
   const { user, isAdmin, loading, role } = useAuth();
-  const [activeTab, setActiveTab] = useState('usuarios');
 
-  // Adjust active tab when authentication state or role changes
+  // Persistir la pestaña activa en localStorage para que no se pierda al cambiar de pestaña en el navegador
+  const [activeTab, setActiveTabState] = useState(() => {
+    return localStorage.getItem('restaurante_active_tab') || 'usuarios';
+  });
+
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    localStorage.setItem('restaurante_active_tab', tab);
+  };
+
+  // Ajustar la pestaña SOLO cuando cambie la autenticación o rol, respetando la pestaña previamente guardada
   useEffect(() => {
     if (user) {
-      if (isAdmin) {
-        setActiveTab('usuarios');
+      const savedTab = localStorage.getItem('restaurante_active_tab');
+      if (!isAdmin) {
+        // Para roles no administradores, proteger pestañas administrativas
+        const adminTabs = ['usuarios', 'reportes'];
+        if (!savedTab || adminTabs.includes(savedTab)) {
+          setActiveTab('portal');
+        } else {
+          setActiveTabState(savedTab);
+        }
       } else {
-        setActiveTab('portal');
+        // Para administradores, si estaba en portal de empleado, ir a usuarios
+        if (savedTab === 'portal') {
+          setActiveTab('usuarios');
+        } else if (savedTab) {
+          setActiveTabState(savedTab);
+        }
       }
     }
-  }, [user, isAdmin]);
+  }, [user?.id, isAdmin]);
 
   if (loading) {
     return (

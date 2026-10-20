@@ -1,44 +1,182 @@
 import { supabase } from './supabaseClient';
 
 /**
+ * Extrae la ruta interna del bucket 'imagenes' a partir de una URL pública
+ */
+export function extractStoragePath(imageUrlOrPath) {
+  if (!imageUrlOrPath || typeof imageUrlOrPath !== 'string') return null;
+  const marker = '/imagenes/';
+  const idx = imageUrlOrPath.indexOf(marker);
+  if (idx !== -1) {
+    return decodeURIComponent(imageUrlOrPath.substring(idx + marker.length));
+  }
+  if (imageUrlOrPath.startsWith('platos/')) {
+    return imageUrlOrPath;
+  }
+  return null;
+}
+
+/**
  * Servicio para la gestión de Platos
- * Tabla: plato (id_plato, nombre, descripcion)
+ * Tabla: plato (id_plato, nombre, descripcion, imagen_url)
  */
 export class Platos {
-  async createPlato(platoData) {
-    const { data, error } = await supabase
-      .from('plato')
-      .insert(platoData)
-      .select();
-    if (error) throw error;
-    return data;
+  /**
+   * Sube una imagen al bucket 'imagenes' dentro del directorio 'platos'
+   * @param {File|Blob} file
+   * @returns {Promise<{ filePath: string, publicUrl: string }>}
+   */
+  async uploadPlatoImage(file) {
+    if (!file) throw new Error('No se proporcionó ningún archivo para subir.');
+
+    const ext = file.type === 'image/webp' ? 'webp' : (file.name?.split('.').pop() || 'webp');
+    const cleanName = `plato_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    const filePath = `platos/${cleanName}`;
+
+    const { error } = await supabase.storage
+      .from('imagenes')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type || 'image/webp',
+      });
+
+    if (error) {
+      throw new Error(`Error al subir la imagen al bucket: ${error.message}`);
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('imagenes')
+      .getPublicUrl(filePath);
+
+    return { filePath, publicUrl: urlData.publicUrl };
   }
 
-  async updatePlato(id_plato, updateData) {
-    const { data, error } = await supabase
-      .from('plato')
-      .update(updateData)
-      .eq('id_plato', id_plato)
-      .select();
+  /**
+   * Elimina una imagen del bucket de Supabase
+   * @param {string} imageUrlOrPath
+   */
+  async deletePlatoImage(imageUrlOrPath) {
+    const path = extractStoragePath(imageUrlOrPath);
+    if (!path) return;
 
-    if (error) throw error;
-    return data;
+    const { error } = await supabase.storage
+      .from('imagenes')
+      .remove([path]);
+
+    if (error) {
+      console.warn(`No se pudo eliminar la imagen previa de storage (${path}):`, error.message);
+    }
   }
 
-  async deletePlato(id_plato) {
+  /**
+   * Crea un nuevo plato con soporte atómico para imagen:
+   * Si se incluye una imagen, se sube primero; si la inserción en BD falla,
+   * se realiza rollback inmediato eliminando la imagen del bucket.
+   * 
+   * @param {Object} platoData { nombre, descripcion, ... }
+   * @param {File|Blob} [imageFile] Archivo de imagen comprimido opcional
+   */
+  async createPlato(platoData, imageFile = null) {
+    let uploadedPath = null;
+    let finalData = { ...platoData };
+
+    if (imageFile) {
+      const { filePath, publicUrl } = await this.uploadPlatoImage(imageFile);
+      uploadedPath = filePath;
+      finalData.imagen_url = publicUrl;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('plato')
+        .insert(finalData)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (dbError) {
+      // ROLLBACK: si la consulta a la base de datos falla, la imagen no se queda en el bucket
+      if (uploadedPath) {
+        console.warn('Fallo la creación del plato en BD. Ejecutando rollback de imagen:', uploadedPath);
+        await this.deletePlatoImage(uploadedPath).catch(console.error);
+      }
+      throw dbError;
+    }
+  }
+
+  /**
+   * Actualiza un plato existente con soporte atómico para reemplazar o eliminar imagen.
+   * 
+   * @param {number|string} id_plato
+   * @param {Object} updateData { nombre, descripcion, ... }
+   * @param {File|Blob|null} [newImageFile] Nueva imagen a subir
+   * @param {boolean} [removeCurrentImage=false] Indica si se debe eliminar la imagen actual
+   * @param {string} [currentImageUrl=null] URL de la imagen actual para limpieza
+   */
+  async updatePlato(id_plato, updateData, newImageFile = null, removeCurrentImage = false, currentImageUrl = null) {
+    let uploadedPath = null;
+    let finalUpdate = { ...updateData };
+
+    if (newImageFile) {
+      const { filePath, publicUrl } = await this.uploadPlatoImage(newImageFile);
+      uploadedPath = filePath;
+      finalUpdate.imagen_url = publicUrl;
+    } else if (removeCurrentImage) {
+      finalUpdate.imagen_url = null;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('plato')
+        .update(finalUpdate)
+        .eq('id_plato', id_plato)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Si la actualización en BD fue exitosa y se reemplazó o eliminó la imagen previa,
+      // limpiamos la imagen vieja del bucket
+      if ((newImageFile || removeCurrentImage) && currentImageUrl) {
+        await this.deletePlatoImage(currentImageUrl).catch(console.error);
+      }
+
+      return data;
+    } catch (dbError) {
+      // ROLLBACK: si la actualización en BD falla, eliminamos la nueva imagen subida
+      if (uploadedPath) {
+        console.warn('Fallo la actualización del plato en BD. Ejecutando rollback de nueva imagen:', uploadedPath);
+        await this.deletePlatoImage(uploadedPath).catch(console.error);
+      }
+      throw dbError;
+    }
+  }
+
+  /**
+   * Elimina un plato y su imagen asociada en el bucket de storage
+   */
+  async deletePlato(id_plato, currentImageUrl = null) {
     // 1. Eliminar relaciones en la tabla pivote menu_plato para evitar violación de FK
     await supabase
       .from('menu_plato')
       .delete()
       .eq('id_plato', id_plato);
 
-    // 2. Eliminar el plato
+    // 2. Eliminar el plato en BD
     const { error } = await supabase
       .from('plato')
       .delete()
       .eq('id_plato', id_plato);
 
     if (error) throw error;
+
+    // 3. Limpiar imagen de storage si existía
+    if (currentImageUrl) {
+      await this.deletePlatoImage(currentImageUrl).catch(console.error);
+    }
+
     return true;
   }
 

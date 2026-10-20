@@ -4,6 +4,7 @@ import {
   platosService, 
   menuDiaService 
 } from '../lib/menu';
+import { getMondayOfWeek } from '../lib/dateUtils';
 import { 
   UtensilsCrossed, 
   CalendarDays, 
@@ -20,7 +21,14 @@ export default function CrearMenu() {
   const { isAdmin } = useAuth();
 
   // Pestaña activa para el administrador: 'menu' (Menú Semanal) o 'platos' (Catálogo de Platos)
-  const [activeTab, setActiveTab] = useState('menu');
+  const [activeTab, setActiveTabState] = useState(() => {
+    return localStorage.getItem('crearmenu_active_subtab') || 'menu';
+  });
+
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    localStorage.setItem('crearmenu_active_subtab', tab);
+  };
 
   // Estados de datos sincronizados con Supabase
   const [platos, setPlatos] = useState([]);
@@ -28,8 +36,10 @@ export default function CrearMenu() {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Modal para la creación semanal completa
+  // Modal para la creación / edición semanal completa
   const [isWeekModalOpen, setIsWeekModalOpen] = useState(false);
+  const [selectedWeekMonday, setSelectedWeekMonday] = useState(() => getMondayOfWeek());
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
 
   const showToast = (message) => {
     setToastMessage(message);
@@ -135,7 +145,11 @@ export default function CrearMenu() {
         <MenuSemanalView
           menus={menus}
           isAdmin={isAdmin}
-          onOpenCreateWeekModal={() => setIsWeekModalOpen(true)}
+          onOpenCreateWeekModal={(weekMonday, dayIdx = 0) => {
+            if (weekMonday) setSelectedWeekMonday(weekMonday);
+            setSelectedDayIndex(dayIdx);
+            setIsWeekModalOpen(true);
+          }}
           onRefresh={loadData}
           loading={loading}
         />
@@ -150,12 +164,15 @@ export default function CrearMenu() {
         />
       )}
 
-      {/* Modal: Creación Semanal Completa con Guardado Temporal (reutiliza Modal.js) */}
+      {/* Modal: Creación / Edición Semanal Completa con sincronización de datos existentes */}
       {isAdmin && (
         <MenuSemanalModal
           isOpen={isWeekModalOpen}
           onClose={() => setIsWeekModalOpen(false)}
           platos={platos}
+          menus={menus}
+          initialMonday={selectedWeekMonday}
+          initialDayIndex={selectedDayIndex}
           onMenuCreated={loadData}
           showToast={showToast}
         />
