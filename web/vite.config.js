@@ -5,7 +5,6 @@ export default defineConfig({
   plugins: [react()],
   envPrefix: ['VITE_', 'REACT_APP_'],
   define: {
-    "process.env": process.env,
-    ENV_KEY: process.env.ENV_KEY,
+    'process.env': {},
   },
 })
