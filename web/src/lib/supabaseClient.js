@@ -1,9 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_APP_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_APP_SUPABASE_API_KEY;
+const SUPABASE_URL =
+  import.meta.env.VITE_APP_SUPABASE_URL ||
+  import.meta.env.VITE_SUPABASE_URL ||
+  import.meta.env.REACT_APP_SUPABASE_URL ||
+  '';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+const SUPABASE_KEY =
+  import.meta.env.VITE_APP_SUPABASE_API_KEY ||
+  import.meta.env.VITE_APP_SUPABASE_ANON_KEY ||
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env.VITE_SUPABASE_KEY ||
+  import.meta.env.REACT_APP_SUPABASE_API_KEY ||
+  import.meta.env.REACT_APP_SUPABASE_ANON_KEY ||
+  '';
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error(
+    'Error con la conexión a los servidores.'
+  );
+}
+
+// Fallback a URL simulada válida sintácticamente para evitar que createClient lance "supabaseUrl is required"
+const safeUrl = SUPABASE_URL || 'https://placeholder.supabase.co';
+const safeKey = SUPABASE_KEY || 'placeholder-anon-key';
+
+export const supabase = createClient(safeUrl, safeKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -107,7 +129,7 @@ export async function createAdminUser(userData) {
   }
 
   // 2. Cliente aislado sin persistencia de sesión para que el Admin continúe logueado
-  const tempAuthClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  const tempAuthClient = createClient(safeUrl, safeKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,

@@ -1,22 +1,26 @@
-## Available Scripts
+## Scripts Disponibles
 
-In the project directory, you can run:
+En el directorio del proyecto, puedes ejecutar:
 
-### `pnpm start`
+### `pnpm dev`
+Inicia el servidor de desarrollo en Vite (`http://localhost:5173`).
 
-## Please
+### `pnpm build`
+Compila el proyecto para producción en la carpeta `dist`.
 
-use pnpm for dependency management, it is faster and more efficient than npm. Before to use this app, you need to create a .env file in the root directory with the following variables:
+## Variables de Entorno
 
+Crea un archivo `.env` en la raíz de `/web` o configura en Vercel (Project Settings > Environment Variables):
+
+```env
+VITE_APP_SUPABASE_URL=https://[YOUR_PROJECT_REF].supabase.co
+VITE_APP_SUPABASE_API_KEY=[YOUR_SUPABASE_ANON_KEY]
 ```
-REACT_APP_SUPABASE_URL=https://[YOUR_PROJECT_REF].supabase.co
-REACT_APP_SUPABASE_API_KEY=[YOUR_SUPABASE_ANON_KEY]
-```
+*(También se soporta `REACT_APP_SUPABASE_URL` y `REACT_APP_SUPABASE_API_KEY` por compatibilidad).*
 
-## And intall the dependences
+## Instalación de dependencias
 
-```
+```bash
 pnpm install
 ```
 
-## Is React
