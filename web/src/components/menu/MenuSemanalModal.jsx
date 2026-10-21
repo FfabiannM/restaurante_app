@@ -58,6 +58,9 @@ export default function MenuSemanalModal({
   const [draftSavedAt, setDraftSavedAt] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // Estado original de la BD para detección de cambios (dirty checking)
+  const [originalWeekData, setOriginalWeekData] = useState({ platosByDate: {}, isPublished: true });
+
   // ========================================================
   // EXTRAER DATOS EXISTENTES DESDE SUPABASE (menus)
   // ========================================================
@@ -74,7 +77,7 @@ export default function MenuSemanalModal({
         if (m.estado_publicacion === true || m.estado_publicacion === 'Publicado') {
           anyPublished = true;
         }
-        data[d.dateStr] = (m.platos || []).map((p) => p.id_plato);
+        data[d.dateStr] = Array.from(new Set((m.platos || []).map((p) => p.id_plato)));
       } else {
         data[d.dateStr] = [];
       }
@@ -104,6 +107,7 @@ export default function MenuSemanalModal({
 
     // 1. Obtener los platos guardados en el sistema para esta semana
     const existing = getExistingWeekData(targetMonday);
+    setOriginalWeekData(existing);
 
     // 2. Verificar si existe un borrador temporal no guardado en localStorage para ESTA misma semana
     let loadedFromDraft = false;
@@ -167,6 +171,7 @@ export default function MenuSemanalModal({
       } catch (err) {}
       setDraftSavedAt(null);
       const existing = getExistingWeekData(startMonday);
+      setOriginalWeekData(existing);
       setSelectedPlatosByDate(existing.platosByDate);
       setPublicarSemana(existing.isPublished);
       showToast?.('Borrador descartado. Se restauraron los datos del menú guardado.');
@@ -179,7 +184,7 @@ export default function MenuSemanalModal({
     if (!activeDateStr) return;
 
     setSelectedPlatosByDate((prev) => {
-      const currentList = prev[activeDateStr] || [];
+      const currentList = Array.from(new Set(prev[activeDateStr] || []));
       const exists = currentList.some((id) => String(id) === String(platoId));
       const updated = exists
         ? currentList.filter((id) => String(id) !== String(platoId))
@@ -200,6 +205,7 @@ export default function MenuSemanalModal({
     setActiveDayIndex(0);
 
     const existing = getExistingWeekData(newMonday);
+    setOriginalWeekData(existing);
 
     // Revisar si hay borrador para la nueva semana seleccionada
     let loadedFromDraft = false;
@@ -248,11 +254,42 @@ export default function MenuSemanalModal({
       return;
     }
 
-    // Construir el payload para guardar_menu_semanal
-    const diasPayload = weekDays.map((d) => ({
+    // Detección de cambios (Dirty Checking): filtrar solo los días que sufrieron modificaciones
+    const diasModificados = weekDays.filter((d) => {
+      const prevPlatos = (originalWeekData?.platosByDate?.[d.dateStr] || [])
+        .map(Number)
+        .sort((a, b) => a - b);
+      const currentPlatos = Array.from(new Set((selectedPlatosByDate[d.dateStr] || []).map(Number)))
+        .sort((a, b) => a - b);
+
+      // 1. ¿Cambiaron los platos de este día?
+      const platosChanged =
+        prevPlatos.length !== currentPlatos.length ||
+        prevPlatos.some((id, idx) => id !== currentPlatos[idx]);
+
+      if (platosChanged) return true;
+
+      // 2. ¿Cambió el estado de publicación global y este día tiene menú o platos asignados?
+      const estadoChanged =
+        typeof originalWeekData?.isPublished === 'boolean' &&
+        publicarSemana !== originalWeekData.isPublished;
+      const hasContent = currentPlatos.length > 0 || prevPlatos.length > 0;
+      if (estadoChanged && hasContent) return true;
+
+      return false;
+    });
+
+    if (diasModificados.length === 0) {
+      showToast?.('No se detectaron modificaciones en el menú de la semana.');
+      onClose();
+      return;
+    }
+
+    // Construir el payload exclusivamente con los días modificados (evitando tocar otros días u otras semanas)
+    const diasPayload = diasModificados.map((d) => ({
       fecha: d.dateStr,
       estado_publicacion: publicarSemana,
-      platos_ids: (selectedPlatosByDate[d.dateStr] || []).map(Number),
+      platos_ids: Array.from(new Set((selectedPlatosByDate[d.dateStr] || []).map(Number))),
     }));
 
     try {
@@ -266,8 +303,9 @@ export default function MenuSemanalModal({
       } catch (err) {}
       setDraftSavedAt(null);
 
+      const nombresDias = diasModificados.map((d) => d.dayName).join(', ');
       showToast?.(
-        `Menú de la semana (${weekDays[0].displayDate} - ${weekDays[weekDays.length - 1].displayDate}) guardado exitosamente.`
+        `Menú actualizado exitosamente para: ${nombresDias}.`
       );
 
       onClose();

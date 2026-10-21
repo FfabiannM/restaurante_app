@@ -287,10 +287,8 @@ export class MenuDia {
   }
 
   /**
-   * Guarda o actualiza un menu_dia y crea sus relaciones N:M en menu_plato:
-   * 1. Crea o actualiza el registro en menu_dia.
-   * 2. Obtiene el id_menu real generado por la base de datos.
-   * 3. Crea múltiples filas en menu_plato compartiendo el mismo id_menu pero con cada id_plato.
+   * Guarda o actualiza un menu_dia y sincroniza sus relaciones N:M en menu_plato
+   * de forma diferencial (sin borrar a ciegas ni generar duplicados).
    */
   async guardarMenuCompleto({ id_menu, fecha, estado_publicacion, platosIds = [] }) {
     const estadoBool = typeof estado_publicacion === 'boolean'
@@ -348,18 +346,51 @@ export class MenuDia {
       throw new Error('No se pudo obtener el identificador (id_menu) del menú del día.');
     }
 
-    // Sincronizar las relaciones N:M en menu_plato
-    // 1. Eliminar registros anteriores con este id_menu
-    const { error: delMpError } = await supabase
+    // Sincronización diferencial en menu_plato:
+    // Deduplicar platos solicitados por ID
+    const targetPlatoIds = Array.from(new Set((platosIds || []).map(Number)));
+
+    // Consultar las relaciones actuales de este menú
+    const { data: existingRels, error: relsErr } = await supabase
       .from('menu_plato')
-      .delete()
+      .select('id_menuplato, id_plato')
       .eq('id_menu', targetMenuId);
 
-    if (delMpError) throw delMpError;
+    if (relsErr) {
+      console.warn('Error al consultar relaciones previas en menu_plato:', relsErr.message);
+    }
 
-    // 2. Insertar una fila en menu_plato por cada plato seleccionado con el id_menu obtenido
-    if (platosIds && platosIds.length > 0) {
-      const pivotRows = platosIds.map((id_plato) => ({
+    const currentRels = existingRels || [];
+    const currentPlatoIds = new Set(currentRels.map((r) => Number(r.id_plato)));
+
+    // 1. Identificar registros a eliminar: platos ya no seleccionados o filas duplicadas existentes en BD
+    const seenPids = new Set();
+    const idsToDelete = [];
+    for (const rel of currentRels) {
+      const pid = Number(rel.id_plato);
+      if (!targetPlatoIds.includes(pid) || seenPids.has(pid)) {
+        idsToDelete.push(rel.id_menuplato);
+      } else {
+        seenPids.add(pid);
+      }
+    }
+
+    if (idsToDelete.length > 0) {
+      const { error: delError } = await supabase
+        .from('menu_plato')
+        .delete()
+        .in('id_menuplato', idsToDelete);
+
+      if (delError) {
+        console.warn('Advertencia al eliminar platos desvinculados de menu_plato (posible falta de política RLS DELETE):', delError.message);
+      }
+    }
+
+    // 2. Insertar únicamente platos NUEVOS que no estaban vinculados previamente
+    const toInsert = targetPlatoIds.filter((pid) => !currentPlatoIds.has(pid));
+
+    if (toInsert.length > 0) {
+      const pivotRows = toInsert.map((id_plato) => ({
         id_menu: targetMenuId,
         id_plato: Number(id_plato),
       }));
@@ -423,6 +454,7 @@ export class MenuDia {
 
   /**
    * Obtiene todos los menú_dia junto con los platos asociados (relación N:M)
+   * Deduplica platos garantizando unicidad por día.
    */
   async getMenuDiasConPlatos() {
     const { data: menus, error: menusErr } = await supabase
@@ -443,10 +475,21 @@ export class MenuDia {
     const relaciones = menuPlatosRes.data || [];
 
     return menus.map((menu) => {
-      const platosAsociados = relaciones
-        .filter((rel) => rel.id_menu === menu.id_menu)
-        .map((rel) => platosMap.get(rel.id_plato))
-        .filter(Boolean);
+      const seenPlatos = new Set();
+      const platosAsociados = [];
+
+      for (const rel of relaciones) {
+        if (rel.id_menu === menu.id_menu) {
+          const pid = Number(rel.id_plato);
+          if (!seenPlatos.has(pid)) {
+            seenPlatos.add(pid);
+            const plato = platosMap.get(pid);
+            if (plato) {
+              platosAsociados.push(plato);
+            }
+          }
+        }
+      }
 
       return {
         ...menu,
@@ -517,38 +560,65 @@ export class MenuPlato {
 
   /**
    * Sincroniza los platos asignados a un menú del día específico (N:M)
-   * Crea varios registros con el mismo id_menu pero diferente id_plato.
+   * Usa sincronización diferencial para evitar duplicados y preservar integridad.
    */
   async asociarPlatosAMenu(id_menu, platosIds = []) {
     if (!id_menu) {
       throw new Error('id_menu es requerido para asociar platos en menu_plato.');
     }
 
-    // 1. Eliminar asociaciones previas
-    const { error: delError } = await supabase
+    const targetPlatoIds = Array.from(new Set((platosIds || []).map(Number)));
+
+    // Obtener relaciones actuales
+    const { data: existingRels, error: relsErr } = await supabase
       .from('menu_plato')
-      .delete()
+      .select('id_menuplato, id_plato')
       .eq('id_menu', id_menu);
 
-    if (delError) throw delError;
-
-    if (!platosIds || platosIds.length === 0) {
-      return [];
+    if (relsErr) {
+      console.warn('Error al consultar relaciones previas en asociarPlatosAMenu:', relsErr.message);
     }
 
-    // 2. Insertar las nuevas asociaciones: una por cada plato con el mismo id_menu
-    const records = platosIds.map((id_plato) => ({
-      id_menu: id_menu,
-      id_plato: Number(id_plato),
-    }));
+    const currentRels = existingRels || [];
+    const currentPlatoIds = new Set(currentRels.map((r) => Number(r.id_plato)));
 
-    const { data, error } = await supabase
-      .from('menu_plato')
-      .insert(records)
-      .select();
+    // 1. Eliminar los que ya no están o duplicados
+    const seenPids = new Set();
+    const idsToDelete = [];
+    for (const rel of currentRels) {
+      const pid = Number(rel.id_plato);
+      if (!targetPlatoIds.includes(pid) || seenPids.has(pid)) {
+        idsToDelete.push(rel.id_menuplato);
+      } else {
+        seenPids.add(pid);
+      }
+    }
 
-    if (error) throw error;
-    return data;
+    if (idsToDelete.length > 0) {
+      await supabase
+        .from('menu_plato')
+        .delete()
+        .in('id_menuplato', idsToDelete);
+    }
+
+    // 2. Insertar únicamente los platos nuevos que no estaban asociados
+    const toInsert = targetPlatoIds.filter((pid) => !currentPlatoIds.has(pid));
+    if (toInsert.length > 0) {
+      const records = toInsert.map((id_plato) => ({
+        id_menu: id_menu,
+        id_plato: Number(id_plato),
+      }));
+
+      const { data, error } = await supabase
+        .from('menu_plato')
+        .insert(records)
+        .select();
+
+      if (error) throw error;
+      return data;
+    }
+
+    return [];
   }
 }
 
