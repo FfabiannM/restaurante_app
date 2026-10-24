@@ -6,6 +6,29 @@ import 'package:restaurante_app/features/auth/domain/user_profile.dart';
 class SupabaseAuthRepository {
   UserProfile? _localSession;
 
+  bool get hasActiveSession {
+    final client = SupabaseConfig.client;
+    return client == null
+        ? _localSession != null
+        : client.auth.currentSession != null;
+  }
+
+  Future<void> createPasswordResetRequest({
+    required String email,
+    String? message,
+  }) async {
+    final client = SupabaseConfig.client;
+    if (client == null) {
+      throw Exception(
+        'Supabase no está disponible para registrar la solicitud.',
+      );
+    }
+    await client.from('password_reset_requests').insert({
+      'email': email.trim().toLowerCase(),
+      'message': message?.trim().isEmpty == true ? null : message?.trim(),
+    });
+  }
+
   static final UserProfile demoEmpleado = UserProfile(
     id: 'demo-user-123',
     email: 'juan.empleado@institucion.gob.bo',
@@ -52,33 +75,14 @@ class SupabaseAuthRepository {
         return _localSession;
       }
 
-      // 1. Intentar consultar tabla public.usuarios (db.md)
-      try {
-        final usuarioData = await client
-            .from('usuarios')
-            .select()
-            .eq('id', user.id)
-            .maybeSingle();
-
-        if (usuarioData != null) {
-          return UserProfile.fromJson(usuarioData);
-        }
-      } catch (_) {
-        // Fallback a tabla profiles si usuarios no tiene permisos
+      final profile = await _loadRemoteProfile(
+        client,
+        userId: user.id,
+        email: user.email,
+      );
+      if (profile != null) {
+        return profile;
       }
-
-      // 2. Intentar consultar tabla profiles
-      try {
-        final profileData = await client
-            .from('profiles')
-            .select()
-            .eq('id', user.id)
-            .maybeSingle();
-
-        if (profileData != null) {
-          return UserProfile.fromJson(profileData);
-        }
-      } catch (_) {}
 
       return UserProfile(
         id: user.id,
@@ -93,7 +97,9 @@ class SupabaseAuthRepository {
   }
 
   Future<UserProfile> signInWithEmailPassword(
-      String email, String password) async {
+    String email,
+    String password,
+  ) async {
     final client = SupabaseConfig.client;
 
     if (client == null) {
@@ -109,51 +115,83 @@ class SupabaseAuthRepository {
 
       final user = authRes.user;
       if (user == null) {
-        return _mockSignIn(email);
+        throw Exception('Supabase no devolvió el usuario autenticado.');
       }
 
-      // Consultar perfil en usuarios (db.md)
+      final profile = await _loadRemoteProfile(
+        client,
+        userId: user.id,
+        email: user.email ?? email,
+      );
+      if (profile != null) {
+        _localSession = profile;
+        return profile;
+      }
+
+      throw Exception(
+        'La cuenta inició sesión, pero no tiene un perfil en '
+        'public.usuarios ni public.profiles.',
+      );
+    } on AuthRetryableFetchException catch (e) {
+      debugPrint(
+        '⚠️ Supabase Auth no está disponible ($e). Usando sesión local temporal.',
+      );
+      return _mockSignIn(email);
+    } on AuthApiException catch (e) {
+      debugPrint('⚠️ Falló login remoto en Supabase ($e).');
+      rethrow;
+    } catch (e) {
+      debugPrint('⚠️ Falló login remoto en Supabase ($e).');
+      rethrow;
+    }
+  }
+
+  Future<UserProfile?> _loadRemoteProfile(
+    SupabaseClient client, {
+    required String userId,
+    required String? email,
+  }) async {
+    final normalizedEmail = email?.trim().toLowerCase();
+
+    for (final lookup in [
+      {'column': 'id', 'value': userId},
+      if (normalizedEmail != null && normalizedEmail.isNotEmpty)
+        {'column': 'email', 'value': normalizedEmail},
+    ]) {
       try {
         final usuarioData = await client
             .from('usuarios')
             .select()
-            .eq('id', user.id)
+            .eq(lookup['column']!, lookup['value']!)
             .maybeSingle();
-
         if (usuarioData != null) {
-          final prof = UserProfile.fromJson(usuarioData);
-          _localSession = prof;
-          return prof;
+          return UserProfile.fromJson(usuarioData);
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('⚠️ No se pudo leer el perfil en usuarios: $e');
+      }
+    }
 
-      // Fallback a profiles o metadata
+    for (final lookup in [
+      {'column': 'id', 'value': userId},
+      if (normalizedEmail != null && normalizedEmail.isNotEmpty)
+        {'column': 'email', 'value': normalizedEmail},
+    ]) {
       try {
         final profileData = await client
             .from('profiles')
             .select()
-            .eq('id', user.id)
+            .eq(lookup['column']!, lookup['value']!)
             .maybeSingle();
-
         if (profileData != null) {
-          final prof = UserProfile.fromJson(profileData);
-          _localSession = prof;
-          return prof;
+          return UserProfile.fromJson(profileData);
         }
-      } catch (_) {}
-
-      final fallbackProf = UserProfile(
-        id: user.id,
-        email: user.email ?? email,
-        fullName: user.userMetadata?['full_name'] ?? email.split('@').first,
-        role: user.userMetadata?['role'] ?? _inferRoleFromEmail(email),
-      );
-      _localSession = fallbackProf;
-      return fallbackProf;
-    } catch (e) {
-      debugPrint('⚠️ Falló login remoto en Supabase ($e). Usando verificación local/demo.');
-      return _mockSignIn(email);
+      } catch (e) {
+        debugPrint('⚠️ No se pudo leer el perfil en profiles: $e');
+      }
     }
+
+    return null;
   }
 
   UserProfile _mockSignIn(String email) {
@@ -179,19 +217,6 @@ class SupabaseAuthRepository {
     }
     _localSession = prof;
     return prof;
-  }
-
-  String _inferRoleFromEmail(String email) {
-    final lower = email.toLowerCase();
-    if (lower.contains('admin') || lower.contains('institucion')) {
-      return 'admin';
-    } else if (lower.contains('cocina') ||
-        lower.contains('chef') ||
-        lower.contains('encargado')) {
-      return 'cocina';
-    } else {
-      return 'empleado';
-    }
   }
 
   Future<UserProfile> signUpWithEmailPassword({
@@ -230,25 +255,9 @@ class SupabaseAuthRepository {
       role: role,
     );
 
-    try {
-      await client.from('usuarios').upsert({
-        'id': user.id,
-        'ci': 'CI-${user.id.substring(0, 6)}',
-        'nombres': fullName,
-        'apellidos': 'Institucional',
-        'email': email,
-        'rol': role.toUpperCase(),
-        'activo': true,
-      });
-    } catch (_) {
-      try {
-        await client.from('profiles').upsert(profile.toJson());
-      } catch (e) {
-        debugPrint('⚠️ Error guardando perfil en Supabase: $e');
-      }
+    if (client.auth.currentSession != null) {
+      _localSession = profile;
     }
-
-    _localSession = profile;
     return profile;
   }
 
@@ -272,7 +281,9 @@ class SupabaseAuthRepository {
           UserAttributes(password: newPassword),
         );
         if (res.user == null) {
-          throw Exception('No se pudo actualizar la contraseña en Supabase Auth.');
+          throw Exception(
+            'No se pudo actualizar la contraseña en Supabase Auth.',
+          );
         }
         debugPrint('✅ Contraseña actualizada en Supabase Auth.');
       } catch (e) {
@@ -281,7 +292,9 @@ class SupabaseAuthRepository {
       }
     } else {
       // En modo local / demo: la contraseña se actualiza en memoria sin alterar sesión ni datos de BD
-      debugPrint('ℹ️ Contraseña actualizada en modo demo/local sin alterar datos de BD.');
+      debugPrint(
+        'ℹ️ Contraseña actualizada en modo demo/local sin alterar datos de BD.',
+      );
     }
   }
 

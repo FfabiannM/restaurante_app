@@ -23,7 +23,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -68,11 +68,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                 ref.read(adminEmployeesProvider.notifier).loadEmployees(),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_sweep_outlined, color: Colors.white),
-            tooltip: 'Limpiar Datos de Prueba',
-            onPressed: () => _confirmClearTestData(context),
-          ),
-          IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Cerrar Sesión',
             onPressed: () => ref.read(authProvider.notifier).signOut(),
@@ -91,6 +86,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             ),
             Tab(icon: Icon(Icons.card_membership_outlined), text: 'Membresías'),
             Tab(icon: Icon(Icons.analytics_outlined), text: 'Auditoría'),
+            Tab(icon: Icon(Icons.lock_reset_outlined), text: 'Solicitudes'),
           ],
         ),
       ),
@@ -100,6 +96,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           _buildEmployeesTab(state),
           _buildMembershipsTab(state, currentFilter),
           const InstitucionScreen(),
+          _buildPasswordResetRequestsTab(),
         ],
       ),
       floatingActionButton: _tabController.index == 0
@@ -112,6 +109,123 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             )
           : null,
     );
+  }
+
+  Widget _buildPasswordResetRequestsTab() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: ref.read(adminRepositoryProvider).getPasswordResetRequests(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'No se pudieron cargar las solicitudes: ${snapshot.error}',
+              style: const TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+          );
+        }
+        final requests = snapshot.data ?? const [];
+        if (requests.isEmpty) {
+          return const Center(
+            child: Text(
+              'No hay solicitudes de reinicio.',
+              style: TextStyle(color: Colors.white),
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: requests.length,
+          itemBuilder: (context, index) {
+            final request = requests[index];
+            final pending = request['status'] == 'pendiente';
+            return Card(
+              child: ListTile(
+                leading: Icon(
+                  pending
+                      ? Icons.mark_email_unread_outlined
+                      : Icons.check_circle_outline,
+                  color: pending ? Colors.orange : Colors.green,
+                ),
+                title: Text(request['email']?.toString() ?? ''),
+                subtitle: Text(
+                  '${request['status']} · ${request['created_at'] ?? ''}'
+                  '${request['message'] == null ? '' : '\n${request['message']}'}',
+                ),
+                isThreeLine: request['message'] != null,
+                trailing: pending
+                    ? TextButton(
+                        onPressed: () =>
+                            _attendPasswordRequest(request['id'].toString()),
+                        child: const Text('Atender'),
+                      )
+                    : null,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _attendPasswordRequest(String id) async {
+    final passwordController = TextEditingController(text: '123456');
+    final password = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reiniciar contraseña'),
+        content: TextField(
+          controller: passwordController,
+          obscureText: true,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Nueva contraseña',
+            helperText: 'Predeterminada: 123456',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, passwordController.text.trim()),
+            child: const Text('Reiniciar'),
+          ),
+        ],
+      ),
+    );
+    passwordController.dispose();
+    if (password == null || password.isEmpty) return;
+    try {
+      await ref
+          .read(adminRepositoryProvider)
+          .updatePasswordResetRequest(id: id, newPassword: password);
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Contraseña reiniciada correctamente.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo actualizar la solicitud: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // ===========================================================================
@@ -128,6 +242,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       final q = _searchQuery.toLowerCase();
       return e.fullName.toLowerCase().contains(q) ||
           e.ci.contains(q) ||
+          e.email.toLowerCase().contains(q) ||
           e.departamento.toLowerCase().contains(q);
     }).toList();
 
@@ -240,195 +355,201 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       child: Material(
         color: Colors.transparent,
         child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.15),
-          child: Text(
-            emp.nombres.isNotEmpty ? emp.nombres[0].toUpperCase() : 'E',
-            style: const TextStyle(
-              color: Color(0xFF2563EB),
-              fontWeight: FontWeight.bold,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: CircleAvatar(
+            backgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.15),
+            child: Text(
+              emp.nombres.isNotEmpty ? emp.nombres[0].toUpperCase() : 'E',
+              style: const TextStyle(
+                color: Color(0xFF2563EB),
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-        ),
-        title: Text(
-          emp.fullName,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'CI: ${emp.ci} • ${emp.departamento}',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: emp.hasMonthlyPlan
-                        ? Colors.green.withValues(alpha: 0.15)
-                        : Colors.orange.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    emp.hasMonthlyPlan
-                        ? 'Plan Mensual (Bs. 15)'
-                        : 'Diario (Bs. 18)',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+          title: Text(
+            emp.fullName,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'CI: ${emp.ci} • ${emp.departamento}',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                emp.email,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
                       color: emp.hasMonthlyPlan
-                          ? Colors.green.shade800
-                          : Colors.orange.shade900,
+                          ? Colors.green.withValues(alpha: 0.15)
+                          : Colors.orange.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      emp.hasMonthlyPlan
+                          ? 'Plan Mensual (Bs. 15)'
+                          : 'Diario (Bs. 18)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: emp.hasMonthlyPlan
+                            ? Colors.green.shade800
+                            : Colors.orange.shade900,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '${emp.familiares.length}/3 familiares',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                ),
-              ],
-            ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(
-                Icons.edit_outlined,
-                size: 20,
-                color: Colors.blue,
+                  const SizedBox(width: 8),
+                  Text(
+                    '${emp.familiares.length}/3 familiares',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  ),
+                ],
               ),
-              tooltip: 'Editar empleado',
-              onPressed: () => _openEmployeeFormModal(context, employee: emp),
-            ),
-            IconButton(
-              icon: const Icon(
-                Icons.delete_outline,
-                size: 20,
-                color: Colors.red,
-              ),
-              tooltip: 'Eliminar empleado',
-              onPressed: () => _confirmDeleteEmployee(context, emp),
-            ),
-          ],
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Divider(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Familiares Vinculados (Máx. 3)',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (emp.familiares.length <
-                        FamilyPolicy.maxFamilyMembersPerEmployee)
-                      TextButton.icon(
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Agregar Familiar'),
-                        onPressed: () => _openAddFamiliarModal(context, emp.id),
-                      )
-                    else
-                      const Text(
-                        'Cupo máximo lleno',
-                        style: TextStyle(fontSize: 11, color: Colors.grey),
-                      ),
-                  ],
-                ),
-                if (emp.familiares.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8.0),
-                    child: Text(
-                      'No tiene familiares registrados.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  )
-                else
-                  ...emp.familiares.map((fam) {
-                    return Container(
-                      margin: const EdgeInsets.only(top: 6),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          const CircleAvatar(
-                            radius: 14,
-                            backgroundColor: Color(0xFFDBEAFE),
-                            child: Icon(
-                              Icons.person,
-                              size: 16,
-                              color: Color(0xFF2563EB),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  fam.fullName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12.5,
-                                  ),
-                                ),
-                                Text(
-                                  'Parentesco: ${fam.parentesco} • CI: ${fam.ci}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              size: 18,
-                              color: Colors.redAccent,
-                            ),
-                            tooltip: 'Eliminar familiar',
-                            onPressed: () =>
-                                _confirmDeleteFamiliar(context, emp.id, fam),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                const SizedBox(height: 8),
-              ],
-            ),
+            ],
           ),
-        ],
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 20,
+                  color: Colors.blue,
+                ),
+                tooltip: 'Editar empleado',
+                onPressed: () => _openEmployeeFormModal(context, employee: emp),
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: Colors.red,
+                ),
+                tooltip: 'Eliminar empleado',
+                onPressed: () => _confirmDeleteEmployee(context, emp),
+              ),
+            ],
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Familiares Vinculados (Máx. 3)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (emp.familiares.length <
+                          FamilyPolicy.maxFamilyMembersPerEmployee)
+                        TextButton.icon(
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Agregar Familiar'),
+                          onPressed: () =>
+                              _openAddFamiliarModal(context, emp.id),
+                        )
+                      else
+                        const Text(
+                          'Cupo máximo lleno',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                    ],
+                  ),
+                  if (emp.familiares.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text(
+                        'No tiene familiares registrados.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    )
+                  else
+                    ...emp.familiares.map((fam) {
+                      return Container(
+                        margin: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            const CircleAvatar(
+                              radius: 14,
+                              backgroundColor: Color(0xFFDBEAFE),
+                              child: Icon(
+                                Icons.person,
+                                size: 16,
+                                color: Color(0xFF2563EB),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    fam.fullName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Parentesco: ${fam.parentesco} • CI: ${fam.ci}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: Colors.redAccent,
+                              ),
+                              tooltip: 'Eliminar familiar',
+                              onPressed: () =>
+                                  _confirmDeleteFamiliar(context, emp.id, fam),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ===========================================================================
   // TAB 2: CONTROL DE MEMBRESÍAS
@@ -783,6 +904,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       text: employee?.apellidos ?? '',
     );
     final emailController = TextEditingController(text: employee?.email ?? '');
+    final passwordController = TextEditingController();
     final telefonoController = TextEditingController(
       text: employee?.telefono ?? '',
     );
@@ -790,10 +912,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       text: employee?.departamento ?? 'Finanzas y Contabilidad',
     );
     bool hasMonthlyPlan = employee?.hasMonthlyPlan ?? true;
+    bool useDefaultPassword = true;
 
     // Familiares iniciales para nuevo empleado
     final List<Map<String, String>> initialFamiliares = [];
     bool isSubmitting = false;
+    String? modalErrorMessage;
+    String? emailErrorMessage;
 
     showModalBottomSheet(
       context: context,
@@ -801,427 +926,696 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (modalCtx, setModalState) {
-          return Container(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(modalCtx).viewInsets.bottom + 20,
-              top: 20,
-              left: 20,
-              right: 20,
-            ),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        isEditing
-                            ? 'Editar Empleado'
-                            : 'Registrar Nuevo Empleado',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(modalCtx),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: nombresController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombres',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: apellidosController,
-                    decoration: const InputDecoration(
-                      labelText: 'Apellidos',
-                      prefixIcon: Icon(Icons.badge_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: ciController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          decoration: const InputDecoration(
-                            labelText: 'Cédula de Identidad (CI)',
-                            prefixIcon: Icon(Icons.credit_card),
+          return ScaffoldMessenger(
+            child: Scaffold(
+              backgroundColor: Colors.transparent,
+              body: Builder(
+                builder: (sheetCtx) {
+                  void showWarning(String msg, {String? emailErr}) {
+                    setModalState(() {
+                      modalErrorMessage = msg;
+                      emailErrorMessage = emailErr;
+                    });
+                    try {
+                      ScaffoldMessenger.of(sheetCtx).hideCurrentSnackBar();
+                      ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(msg)),
+                            ],
                           ),
+                          backgroundColor: Colors.red,
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 3),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: telefonoController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          decoration: const InputDecoration(
-                            labelText: 'Teléfono',
-                            prefixIcon: Icon(Icons.phone_outlined),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Correo Institucional',
-                      prefixIcon: Icon(Icons.email_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: deptController,
-                    decoration: const InputDecoration(
-                      labelText: 'Departamento / Área',
-                      prefixIcon: Icon(Icons.business_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                      );
+                    } catch (_) {}
+                  }
 
-                  // Membresía inicial
-                  Material(
-                    color: Colors.transparent,
-                    child: SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        'Activar Plan Mensual (Tarifa Bs. 15)',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                  return Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(sheetCtx).size.height * 0.9,
+                      ),
+                      padding: EdgeInsets.only(
+                        bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 20,
+                        top: 20,
+                        left: 20,
+                        right: 20,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(24),
                         ),
                       ),
-                      subtitle: const Text(
-                        'Desmarcar para modalidad diaria particular (Bs. 18)',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                      value: hasMonthlyPlan,
-                      activeThumbColor: Colors.green,
-                      onChanged: (val) {
-                        setModalState(() => hasMonthlyPlan = val);
-                      },
-                    ),
-                  ),
-
-                  // Si es nuevo registro, opción para asociar familiares
-                  if (!isEditing) ...[
-                    const Divider(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Asociar Familiares Iniciales (Opcional, máx. 3)',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        if (initialFamiliares.length < 3)
-                          TextButton.icon(
-                            icon: const Icon(Icons.add, size: 16),
-                            label: const Text('Agregar'),
-                            onPressed: () {
-                              setModalState(() {
-                                initialFamiliares.add({
-                                  'nombres': '',
-                                  'apellidos': apellidosController.text,
-                                  'ci': '',
-                                  'parentesco': 'Hijo/a',
-                                });
-                              });
-                            },
-                          ),
-                      ],
-                    ),
-                    ...initialFamiliares.asMap().entries.map((entry) {
-                      final i = entry.key;
-                      final fam = entry.value;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
+                      child: SingleChildScrollView(
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  isEditing
+                                      ? 'Editar Empleado'
+                                      : 'Registrar Nuevo Empleado',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.close),
+                                  onPressed: () => Navigator.pop(modalCtx),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: nombresController,
+                              onChanged: (_) {
+                                if (modalErrorMessage != null) {
+                                  setModalState(() => modalErrorMessage = null);
+                                }
+                              },
+                              decoration: const InputDecoration(
+                                labelText: 'Nombres',
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: apellidosController,
+                              onChanged: (_) {
+                                if (modalErrorMessage != null) {
+                                  setModalState(() => modalErrorMessage = null);
+                                }
+                              },
+                              decoration: const InputDecoration(
+                                labelText: 'Apellidos',
+                                prefixIcon: Icon(Icons.badge_outlined),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
                             Row(
                               children: [
                                 Expanded(
                                   child: TextField(
-                                    decoration: InputDecoration(
-                                      labelText: 'Nombre Familiar #${i + 1}',
-                                      isDense: true,
-                                    ),
-                                    onChanged: (v) => fam['nombres'] = v,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: TextField(
+                                    controller: ciController,
                                     keyboardType: TextInputType.number,
                                     inputFormatters: [
                                       FilteringTextInputFormatter.digitsOnly,
                                     ],
-                                    decoration: InputDecoration(
-                                      labelText: 'CI Familiar #${i + 1}',
-                                      isDense: true,
+                                    onChanged: (_) {
+                                      if (modalErrorMessage != null) {
+                                        setModalState(
+                                          () => modalErrorMessage = null,
+                                        );
+                                      }
+                                    },
+                                    decoration: const InputDecoration(
+                                      labelText: 'Cédula de Identidad (CI)',
+                                      prefixIcon: Icon(Icons.credit_card),
                                     ),
-                                    onChanged: (v) => fam['ci'] = v,
                                   ),
                                 ),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.remove_circle_outline,
-                                    color: Colors.red,
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: TextField(
+                                    controller: telefonoController,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    onChanged: (_) {
+                                      if (modalErrorMessage != null) {
+                                        setModalState(
+                                          () => modalErrorMessage = null,
+                                        );
+                                      }
+                                    },
+                                    decoration: const InputDecoration(
+                                      labelText: 'Teléfono',
+                                      prefixIcon: Icon(Icons.phone_outlined),
+                                    ),
                                   ),
-                                  onPressed: () {
-                                    setModalState(() {
-                                      initialFamiliares.removeAt(i);
-                                    });
-                                  },
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              onChanged: (_) {
+                                if (emailErrorMessage != null ||
+                                    modalErrorMessage != null) {
+                                  setModalState(() {
+                                    emailErrorMessage = null;
+                                    modalErrorMessage = null;
+                                  });
+                                }
+                              },
+                              decoration: InputDecoration(
+                                labelText: 'Correo Institucional',
+                                prefixIcon: const Icon(Icons.email_outlined),
+                                errorText: emailErrorMessage,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            if (!isEditing) ...[
+                              const Text(
+                                'Contraseña de acceso',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              SegmentedButton<bool>(
+                                segments: const [
+                                  ButtonSegment<bool>(
+                                    value: true,
+                                    label: Text('Automática (123456)'),
+                                    icon: Icon(Icons.auto_awesome),
+                                  ),
+                                  ButtonSegment<bool>(
+                                    value: false,
+                                    label: Text('Personalizada'),
+                                    icon: Icon(Icons.edit_outlined),
+                                  ),
+                                ],
+                                selected: {useDefaultPassword},
+                                onSelectionChanged: (selection) {
+                                  setModalState(() {
+                                    useDefaultPassword = selection.first;
+                                    if (useDefaultPassword) {
+                                      passwordController.clear();
+                                    }
+                                  });
+                                },
+                              ),
+                              if (!useDefaultPassword)
+                                TextField(
+                                  controller: passwordController,
+                                  obscureText: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Contraseña personalizada',
+                                    prefixIcon: Icon(Icons.lock_outline),
+                                  ),
+                                ),
+                              const SizedBox(height: 10),
+                            ],
+                            TextField(
+                              controller: deptController,
+                              onChanged: (_) {
+                                if (modalErrorMessage != null) {
+                                  setModalState(() => modalErrorMessage = null);
+                                }
+                              },
+                              decoration: const InputDecoration(
+                                labelText: 'Departamento / Área',
+                                prefixIcon: Icon(Icons.business_outlined),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Membresía inicial
+                            Material(
+                              color: Colors.transparent,
+                              child: SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text(
+                                  'Activar Plan Mensual (Tarifa Bs. 15)',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                subtitle: const Text(
+                                  'Desmarcar para modalidad diaria particular (Bs. 18)',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                                value: hasMonthlyPlan,
+                                activeThumbColor: Colors.green,
+                                onChanged: (val) {
+                                  setModalState(() => hasMonthlyPlan = val);
+                                },
+                              ),
+                            ),
+
+                            // Si es nuevo registro, opción para asociar familiares
+                            if (!isEditing) ...[
+                              const Divider(),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'Asociar Familiares Iniciales (Opcional, máx. 3)',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  if (initialFamiliares.length < 3)
+                                    TextButton.icon(
+                                      icon: const Icon(Icons.add, size: 16),
+                                      label: const Text('Agregar'),
+                                      onPressed: () {
+                                        setModalState(() {
+                                          initialFamiliares.add({
+                                            'nombres': '',
+                                            'apellidos':
+                                                apellidosController.text,
+                                            'ci': '',
+                                            'parentesco': 'Hijo',
+                                          });
+                                        });
+                                      },
+                                    ),
+                                ],
+                              ),
+                              ...initialFamiliares.asMap().entries.map((entry) {
+                                final i = entry.key;
+                                final fam = entry.value;
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: TextField(
+                                              decoration: InputDecoration(
+                                                labelText:
+                                                    'Nombre Familiar #${i + 1}',
+                                                isDense: true,
+                                              ),
+                                              onChanged: (v) =>
+                                                  fam['nombres'] = v,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: TextField(
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              inputFormatters: [
+                                                FilteringTextInputFormatter
+                                                    .digitsOnly,
+                                              ],
+                                              decoration: InputDecoration(
+                                                labelText:
+                                                    'CI Familiar #${i + 1}',
+                                                isDense: true,
+                                              ),
+                                              onChanged: (v) => fam['ci'] = v,
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.remove_circle_outline,
+                                              color: Colors.red,
+                                            ),
+                                            onPressed: () {
+                                              setModalState(() {
+                                                initialFamiliares.removeAt(i);
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                            if (isEditing) ...[
+                              const Divider(),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Familiares asociados',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (employee.familiares.length < 3)
+                                    TextButton.icon(
+                                      icon: const Icon(Icons.add, size: 16),
+                                      label: const Text('Agregar'),
+                                      onPressed: () {
+                                        Navigator.pop(modalCtx);
+                                        _openAddFamiliarModal(
+                                          context,
+                                          employee.id,
+                                        );
+                                      },
+                                    ),
+                                ],
+                              ),
+                              if (employee.familiares.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Text(
+                                    'No hay familiares asociados.',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                )
+                              else
+                                ...employee.familiares.map(
+                                  (fam) => ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    leading: const Icon(Icons.person_outline),
+                                    title: Text(fam.fullName),
+                                    subtitle: Text(
+                                      '${fam.parentesco} • CI: ${fam.ci}',
+                                    ),
+                                    trailing: Wrap(
+                                      children: [
+                                        IconButton(
+                                          tooltip: 'Editar familiar',
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            color: Colors.indigo,
+                                          ),
+                                          onPressed: () {
+                                            Navigator.pop(modalCtx);
+                                            _openAddFamiliarModal(
+                                              context,
+                                              employee.id,
+                                              familiar: fam,
+                                            );
+                                          },
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Eliminar familiar',
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.red,
+                                          ),
+                                          onPressed: () {
+                                            Navigator.pop(modalCtx);
+                                            _confirmDeleteFamiliar(
+                                              context,
+                                              employee.id,
+                                              fam,
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+
+                            const SizedBox(height: 16),
+
+                            if (modalErrorMessage != null) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                margin: const EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.red.shade300,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.warning_amber_rounded,
+                                      color: Colors.red,
+                                      size: 22,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Atención: $modalErrorMessage',
+                                        style: const TextStyle(
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: ElevatedButton(
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () async {
+                                        final nombres = nombresController.text
+                                            .trim();
+                                        final apellidos = apellidosController
+                                            .text
+                                            .trim();
+                                        final ci = ciController.text.trim();
+                                        final telefono = telefonoController.text
+                                            .trim();
+                                        final email = emailController.text
+                                            .trim();
+                                        final password = useDefaultPassword
+                                            ? '123456'
+                                            : passwordController.text.trim();
+                                        final dept = deptController.text.trim();
+
+                                        // 1. Validación estricta: No permitir guardar si hay campos vacíos
+                                        if (nombres.isEmpty ||
+                                            apellidos.isEmpty ||
+                                            ci.isEmpty ||
+                                            telefono.isEmpty ||
+                                            email.isEmpty ||
+                                            dept.isEmpty) {
+                                          showWarning(
+                                            'No se permite guardar al empleado con campos vacíos. Completa todos los campos obligatorios.',
+                                          );
+                                          return;
+                                        }
+
+                                        if (!isEditing && password.length < 6) {
+                                          showWarning(
+                                            'La contraseña personalizada debe tener al menos 6 caracteres.',
+                                          );
+                                          return;
+                                        }
+
+                                        // 2. Validación estricta de campos numéricos (solo números)
+                                        final numericRegex = RegExp(
+                                          r'^[0-9]+$',
+                                        );
+                                        if (!numericRegex.hasMatch(ci)) {
+                                          showWarning(
+                                            'El campo Cédula de Identidad (CI) solo permite números.',
+                                          );
+                                          return;
+                                        }
+
+                                        if (!numericRegex.hasMatch(telefono)) {
+                                          showWarning(
+                                            'El campo Teléfono solo permite números.',
+                                          );
+                                          return;
+                                        }
+
+                                        // 3. Validación de correo institucional
+                                        final emailRegex = RegExp(
+                                          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                                        );
+                                        if (!emailRegex.hasMatch(email)) {
+                                          showWarning(
+                                            'Por favor ingresa un correo electrónico institucional válido.',
+                                            emailErr:
+                                                'Correo institucional inválido (ej. usuario@institucion.gob.bo)',
+                                          );
+                                          return;
+                                        }
+
+                                        // 4. Validación de familiares asociados
+                                        for (
+                                          int i = 0;
+                                          i < initialFamiliares.length;
+                                          i++
+                                        ) {
+                                          final fam = initialFamiliares[i];
+                                          final famNombre =
+                                              (fam['nombres'] ?? '').trim();
+                                          final famCi = (fam['ci'] ?? '')
+                                              .trim();
+                                          if (famNombre.isEmpty ||
+                                              famCi.isEmpty) {
+                                            showWarning(
+                                              'El familiar #${i + 1} tiene campos vacíos. Completa nombre y CI.',
+                                            );
+                                            return;
+                                          }
+                                          if (!numericRegex.hasMatch(famCi)) {
+                                            showWarning(
+                                              'El CI del familiar #${i + 1} solo permite números.',
+                                            );
+                                            return;
+                                          }
+                                        }
+
+                                        // Procesar guardado en Supabase
+                                        final messenger = ScaffoldMessenger.of(
+                                          context,
+                                        );
+                                        final navigator = Navigator.of(
+                                          modalCtx,
+                                        );
+                                        setModalState(
+                                          () => isSubmitting = true,
+                                        );
+                                        try {
+                                          bool ok;
+                                          if (isEditing) {
+                                            ok = await ref
+                                                .read(
+                                                  adminEmployeesProvider
+                                                      .notifier,
+                                                )
+                                                .updateEmployee(
+                                                  employee.copyWith(
+                                                    nombres: nombres,
+                                                    apellidos: apellidos,
+                                                    ci: ci,
+                                                    email: email,
+                                                    telefono: telefono,
+                                                    departamento: dept,
+                                                    hasMonthlyPlan:
+                                                        hasMonthlyPlan,
+                                                  ),
+                                                );
+                                          } else {
+                                            ok = await ref
+                                                .read(
+                                                  adminEmployeesProvider
+                                                      .notifier,
+                                                )
+                                                .createEmployee(
+                                                  ci: ci,
+                                                  nombres: nombres,
+                                                  apellidos: apellidos,
+                                                  email: email,
+                                                  password: password,
+                                                  telefono: telefono,
+                                                  departamento: dept,
+                                                  hasMonthlyPlan:
+                                                      hasMonthlyPlan,
+                                                  initialFamiliares:
+                                                      initialFamiliares,
+                                                );
+                                          }
+
+                                          if (modalCtx.mounted) {
+                                            setModalState(
+                                              () => isSubmitting = false,
+                                            );
+                                          }
+
+                                          if (ok) {
+                                            navigator.pop();
+                                            final requiresEmailConfirmation = ref
+                                                .read(adminRepositoryProvider)
+                                                .lastCreatedUserRequiresEmailConfirmation;
+                                            messenger.showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  isEditing
+                                                      ? 'Empleado actualizado con éxito en Supabase.'
+                                                      : requiresEmailConfirmation
+                                                      ? 'Empleado registrado. Debe confirmar su correo electrónico antes de iniciar sesión.'
+                                                      : 'Empleado registrado con éxito en Supabase.',
+                                                ),
+                                                backgroundColor: Colors.green,
+                                                duration: const Duration(
+                                                  seconds: 6,
+                                                ),
+                                              ),
+                                            );
+                                          } else {
+                                            final specificErr = ref
+                                                .read(adminEmployeesProvider)
+                                                .error;
+                                            showWarning(
+                                              specificErr ??
+                                                  'Error al guardar el empleado en la base de datos Supabase.',
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (modalCtx.mounted) {
+                                            setModalState(
+                                              () => isSubmitting = false,
+                                            );
+                                          }
+                                          showWarning(
+                                            e.toString().replaceFirst(
+                                              'Exception: ',
+                                              '',
+                                            ),
+                                          );
+                                        }
+                                      },
+                                child: isSubmitting
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : Text(
+                                        isEditing
+                                            ? 'Guardar Cambios'
+                                            : 'Registrar y Asociar Familiares',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                              ),
+                            ),
                           ],
                         ),
-                      );
-                    }),
-                  ],
-
-                  const SizedBox(height: 16),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                              final nombres = nombresController.text.trim();
-                              final apellidos = apellidosController.text.trim();
-                              final ci = ciController.text.trim();
-                              final telefono = telefonoController.text.trim();
-                              final email = emailController.text.trim();
-                              final dept = deptController.text.trim();
-
-                              // 1. Validación estricta: No permitir guardar si hay campos vacíos
-                              if (nombres.isEmpty ||
-                                  apellidos.isEmpty ||
-                                  ci.isEmpty ||
-                                  telefono.isEmpty ||
-                                  email.isEmpty ||
-                                  dept.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'No se permite guardar al empleado con campos vacíos. Completa todos los campos obligatorios.',
-                                    ),
-                                    backgroundColor: Colors.red,
-                                    duration: Duration(seconds: 3),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              // 2. Validación estricta de campos numéricos (solo números)
-                              final numericRegex = RegExp(r'^[0-9]+$');
-                              if (!numericRegex.hasMatch(ci)) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'El campo Cédula de Identidad (CI) solo permite números.',
-                                    ),
-                                    backgroundColor: Colors.red,
-                                    duration: Duration(seconds: 3),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              if (!numericRegex.hasMatch(telefono)) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'El campo Teléfono solo permite números.',
-                                    ),
-                                    backgroundColor: Colors.red,
-                                    duration: Duration(seconds: 3),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              // 3. Validación de correo institucional
-                              final emailRegex = RegExp(
-                                r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-                              );
-                              if (!emailRegex.hasMatch(email)) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Por favor ingresa un correo electrónico institucional válido.',
-                                    ),
-                                    backgroundColor: Colors.red,
-                                    duration: Duration(seconds: 3),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              // 4. Validación de familiares asociados
-                              for (int i = 0; i < initialFamiliares.length; i++) {
-                                final fam = initialFamiliares[i];
-                                final famNombre = (fam['nombres'] ?? '').trim();
-                                final famCi = (fam['ci'] ?? '').trim();
-                                if (famNombre.isEmpty || famCi.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'El familiar #${i + 1} tiene campos vacíos. Completa nombre y CI.',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                      duration: const Duration(seconds: 3),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                if (!numericRegex.hasMatch(famCi)) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'El CI del familiar #${i + 1} solo permite números.',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                      duration: const Duration(seconds: 3),
-                                    ),
-                                  );
-                                  return;
-                                }
-                              }
-
-                              // Procesar guardado en Supabase
-                              final messenger = ScaffoldMessenger.of(context);
-                              final navigator = Navigator.of(modalCtx);
-                              setModalState(() => isSubmitting = true);
-                              try {
-                                bool ok;
-                                if (isEditing) {
-                                  ok = await ref
-                                      .read(adminEmployeesProvider.notifier)
-                                      .updateEmployee(
-                                        employee.copyWith(
-                                          nombres: nombres,
-                                          apellidos: apellidos,
-                                          ci: ci,
-                                          email: email,
-                                          telefono: telefono,
-                                          departamento: dept,
-                                          hasMonthlyPlan: hasMonthlyPlan,
-                                        ),
-                                      );
-                                } else {
-                                  ok = await ref
-                                      .read(adminEmployeesProvider.notifier)
-                                      .createEmployee(
-                                        ci: ci,
-                                        nombres: nombres,
-                                        apellidos: apellidos,
-                                        email: email,
-                                        telefono: telefono,
-                                        departamento: dept,
-                                        hasMonthlyPlan: hasMonthlyPlan,
-                                        initialFamiliares: initialFamiliares,
-                                      );
-                                }
-
-                                if (modalCtx.mounted) {
-                                  setModalState(() => isSubmitting = false);
-                                }
-
-                                if (ok) {
-                                  navigator.pop();
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        isEditing
-                                            ? 'Empleado actualizado con éxito en Supabase.'
-                                            : 'Empleado registrado con éxito en Supabase.',
-                                      ),
-                                      backgroundColor: Colors.green,
-                                      duration: const Duration(seconds: 3),
-                                    ),
-                                  );
-                                } else {
-                                  messenger.showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Error al guardar el empleado en la base de datos Supabase.',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                      duration: Duration(seconds: 3),
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                if (modalCtx.mounted) {
-                                  setModalState(() => isSubmitting = false);
-                                }
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Error al guardar el empleado en Supabase: $e',
-                                    ),
-                                    backgroundColor: Colors.red,
-                                    duration: const Duration(seconds: 3),
-                                  ),
-                                );
-                              }
-                            },
-                      child: isSubmitting
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2.5,
-                              ),
-                            )
-                          : Text(
-                              isEditing
-                                  ? 'Guardar Cambios'
-                                  : 'Registrar y Asociar Familiares',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                      ),
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           );
@@ -1230,11 +1624,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     );
   }
 
-  void _openAddFamiliarModal(BuildContext context, String employeeId) {
-    final nombresController = TextEditingController();
-    final apellidosController = TextEditingController();
-    final ciController = TextEditingController();
-    String parentesco = 'Hijo/a';
+  void _openAddFamiliarModal(
+    BuildContext context,
+    String employeeId, {
+    Familiar? familiar,
+  }) {
+    final isEditing = familiar != null;
+    final nombresController = TextEditingController(
+      text: familiar?.nombres ?? '',
+    );
+    final apellidosController = TextEditingController(
+      text: familiar?.apellidos ?? '',
+    );
+    final ciController = TextEditingController(text: familiar?.ci ?? '');
+    String parentesco = familiar?.parentesco ?? 'Hijo';
+    String? dialogError;
 
     showDialog(
       context: context,
@@ -1243,27 +1647,77 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Text('Asociar Familiar a Cuenta'),
+          title: Text(
+            isEditing ? 'Editar Familiar' : 'Asociar Familiar a Cuenta',
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (dialogError != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.red,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            dialogError!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 TextField(
                   controller: nombresController,
+                  onChanged: (_) {
+                    if (dialogError != null) {
+                      setDialogState(() => dialogError = null);
+                    }
+                  },
                   decoration: const InputDecoration(labelText: 'Nombres'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: apellidosController,
+                  onChanged: (_) {
+                    if (dialogError != null) {
+                      setDialogState(() => dialogError = null);
+                    }
+                  },
                   decoration: const InputDecoration(labelText: 'Apellidos'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: ciController,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                  ],
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (_) {
+                    if (dialogError != null) {
+                      setDialogState(() => dialogError = null);
+                    }
+                  },
                   decoration: const InputDecoration(
                     labelText: 'Cédula de Identidad (CI)',
                   ),
@@ -1273,14 +1727,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                   initialValue: parentesco,
                   decoration: const InputDecoration(labelText: 'Parentesco'),
                   items: const [
-                    DropdownMenuItem(value: 'Hijo/a', child: Text('Hijo/a')),
+                    DropdownMenuItem(value: 'Hijo', child: Text('Hijo')),
+                    DropdownMenuItem(value: 'Hija', child: Text('Hija')),
                     DropdownMenuItem(value: 'Cónyuge', child: Text('Cónyuge')),
                     DropdownMenuItem(value: 'Padre', child: Text('Padre')),
                     DropdownMenuItem(value: 'Madre', child: Text('Madre')),
-                    DropdownMenuItem(
-                      value: 'Hermano/a',
-                      child: Text('Hermano/a'),
-                    ),
+                    DropdownMenuItem(value: 'Hermano', child: Text('Hermano')),
                   ],
                   onChanged: (val) {
                     if (val != null) {
@@ -1303,6 +1755,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                 final ci = ciController.text.trim();
 
                 if (nombres.isEmpty || apellidos.isEmpty || ci.isEmpty) {
+                  setDialogState(() {
+                    dialogError =
+                        'No se permite asociar un familiar con campos vacíos. Completa Nombres, Apellidos y CI.';
+                  });
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
@@ -1315,11 +1771,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                 }
 
                 if (!RegExp(r'^[0-9]+$').hasMatch(ci)) {
+                  setDialogState(() {
+                    dialogError = 'El CI del familiar solo permite números.';
+                  });
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text(
-                        'El CI del familiar solo permite números.',
-                      ),
+                      content: Text('El CI del familiar solo permite números.'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -1327,23 +1784,36 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                 }
 
                 Navigator.pop(ctx);
-                final ok = await ref
-                    .read(adminEmployeesProvider.notifier)
-                    .addFamiliarToEmployee(
-                      employeeId: employeeId,
-                      ci: ci,
-                      nombres: nombres,
-                      apellidos: apellidos,
-                      parentesco: parentesco,
-                    );
+                final notifier = ref.read(adminEmployeesProvider.notifier);
+                final ok = isEditing
+                    ? await notifier.updateFamiliarForEmployee(
+                        employeeId: employeeId,
+                        familiar: familiar.copyWith(
+                          ci: ci,
+                          nombres: nombres,
+                          apellidos: apellidos,
+                          parentesco: parentesco,
+                        ),
+                      )
+                    : await notifier.addFamiliarToEmployee(
+                        employeeId: employeeId,
+                        ci: ci,
+                        nombres: nombres,
+                        apellidos: apellidos,
+                        parentesco: parentesco,
+                      );
 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
                         ok
-                            ? 'Familiar vinculado exitosamente en Supabase.'
-                            : 'No se pudo agregar: Límite máximo de 3 familiares alcanzado.',
+                            ? (isEditing
+                                  ? 'Familiar actualizado exitosamente.'
+                                  : 'Familiar vinculado exitosamente en Supabase.')
+                            : (isEditing
+                                  ? 'No se pudo actualizar el familiar.'
+                                  : 'No se pudo agregar: Límite máximo de 3 familiares alcanzado.'),
                       ),
                       backgroundColor: ok ? Colors.green : Colors.red,
                     ),
@@ -1400,6 +1870,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             backgroundColor: Colors.redAccent,
           ),
         );
+      } else if (context.mounted) {
+        final error = ref.read(adminEmployeesProvider).error;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error ?? 'No se pudo eliminar el empleado.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -1441,56 +1919,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             backgroundColor: Colors.green,
           ),
         );
-      }
-    }
-  }
-
-  Future<void> _confirmClearTestData(BuildContext context) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Limpiar Datos de Prueba'),
-          ],
-        ),
-        content: const Text(
-          '¿Estás seguro de que deseas eliminar permanentemente todos los registros y cuentas de prueba correspondientes a "empleado", "administrador" y "cocina" en Supabase?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Sí, Eliminar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true && context.mounted) {
-      final ok = await ref.read(adminEmployeesProvider.notifier).clearTestData();
-      if (context.mounted) {
-        if (ok) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Datos de prueba eliminados con éxito de Supabase.'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error al limpiar datos de prueba.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
       }
     }
   }

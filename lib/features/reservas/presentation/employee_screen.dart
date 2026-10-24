@@ -6,7 +6,214 @@ import 'package:restaurante_app/features/familiares/domain/familiar_entity.dart'
 import 'package:restaurante_app/features/familiares/presentation/providers/family_providers.dart';
 import 'package:restaurante_app/features/menu/domain/bolivian_dish_entity.dart';
 import 'package:restaurante_app/features/menu/presentation/providers/weekly_menu_provider.dart';
+import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
+import 'package:restaurante_app/features/reservas/domain/usecases/reservation_policy.dart';
 import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
+
+enum MenuCategoryOption {
+  almuerzoCompleto, // Combo unificado: Ensalada + Sopa + Segundo
+  vegetariano, // Opción independiente: Menú Vegetariano
+  platoEspecial, // Opción independiente: Plato Especial
+}
+
+class DishOptionItem {
+  final String nombre;
+  final String descripcion;
+  final String region;
+  final String imagenUrl;
+  final String categoria;
+
+  const DishOptionItem({
+    required this.nombre,
+    required this.descripcion,
+    required this.region,
+    required this.imagenUrl,
+    required this.categoria,
+  });
+}
+
+const List<DishOptionItem> defaultPlatosFuertes = [
+  DishOptionItem(
+    nombre: 'Silpancho Cochabambino',
+    descripcion:
+        'Carne apanada tierna sobre cama de arroz y papas doradas, con huevo frito y sarza criolla.',
+    region: 'Cochabamba',
+    imagenUrl: 'assets/images/01_silpancho.jpg',
+    categoria: 'Segundo',
+  ),
+  DishOptionItem(
+    nombre: 'Majadito Cruceño',
+    descripcion:
+        'Arroz tostado con charque de res desmenuzado, plátano maduro frito y huevo criollo.',
+    region: 'Santa Cruz',
+    imagenUrl: 'assets/images/03_charque_kan.jpg',
+    categoria: 'Segundo',
+  ),
+  DishOptionItem(
+    nombre: 'Saice Tarijeño',
+    descripcion:
+        'Guiso tradicional de carne picada en ají colorado, arvejas y chuchusmuti.',
+    region: 'Tarija',
+    imagenUrl: 'assets/images/06_fricase.jpg',
+    categoria: 'Segundo',
+  ),
+  DishOptionItem(
+    nombre: 'Falso Conejo',
+    descripcion:
+        'Carne apanada en salsa de ají amarillo con arvejas jugosas y fideo tostado.',
+    region: 'La Paz',
+    imagenUrl: 'assets/images/05_chicharron.jpg',
+    categoria: 'Segundo',
+  ),
+  DishOptionItem(
+    nombre: 'Mondongo Chuquisaqueño',
+    descripcion:
+        'Carne de cerdo dorada en ají colorado acompañada de mote amarillo y papas.',
+    region: 'Chuquisaca',
+    imagenUrl: 'assets/images/06_fricase.jpg',
+    categoria: 'Segundo',
+  ),
+];
+
+const List<DishOptionItem> defaultEnsaladas = [
+  DishOptionItem(
+    nombre: 'Ensalada Fresca del Día',
+    descripcion:
+        'Ensalada de hojas verdes, tomate, zanahoria y aderezo de la casa.',
+    region: 'Nacional',
+    imagenUrl: '',
+    categoria: 'Entrada',
+  ),
+  DishOptionItem(
+    nombre: 'Ensalada Rusa',
+    descripcion: 'Papa, zanahoria, arvejas y mayonesa casera.',
+    region: 'Nacional',
+    imagenUrl: '',
+    categoria: 'Entrada',
+  ),
+];
+
+const List<DishOptionItem> defaultPlatosVegetarianos = [
+  DishOptionItem(
+    nombre: 'Quinua Real con Champiñones y Palta',
+    descripcion:
+        'Quinua perlada al wok con verduras salteadas al oliva, hongos dorados y láminas de palta fresca.',
+    region: 'Potosí / Oruro',
+    imagenUrl: 'assets/images/08_crema_de_quinua.jpg',
+    categoria: 'Vegetariano',
+  ),
+  DishOptionItem(
+    nombre: 'Milanesa de Soya con Ensalada Criolla',
+    descripcion:
+        'Milanesa crocante de proteína de soya con arroz graneado, papas al horno y sarza fresca.',
+    region: 'Nacional',
+    imagenUrl: 'assets/images/07_milanesa_de_soya.jpg',
+    categoria: 'Vegetariano',
+  ),
+  DishOptionItem(
+    nombre: 'Pastel de Verduras Andinas',
+    descripcion:
+        'Pastel horneado de acelga, espinaca, zanahoria y choclo con queso chaqueño artesanal.',
+    region: 'Cochabamba',
+    imagenUrl: 'assets/images/11_tortilla_de_verduras.jpg',
+    categoria: 'Vegetariano',
+  ),
+  DishOptionItem(
+    nombre: 'Ají de Fideo sin Carne (Vegetariano)',
+    descripcion:
+        'Fideo tostado en ají amarillo suave con arvejas, zanahorias y papas en cubos.',
+    region: 'La Paz',
+    imagenUrl: 'assets/images/10_aji_de_fideo_sin_carne.jpg',
+    categoria: 'Vegetariano',
+  ),
+];
+
+const List<DishOptionItem> defaultPlatosEspeciales = [
+  DishOptionItem(
+    nombre: 'Pique Macho Especial',
+    descripcion:
+        'Trozos selectos de lomo de res, salchichas, papas fritas, huevo duro, cebolla, tomate y locoto.',
+    region: 'Cochabamba',
+    imagenUrl: 'assets/images/02_pique_macho.jpg',
+    categoria: 'Especial',
+  ),
+  DishOptionItem(
+    nombre: 'Trucha del Titicaca al Limón',
+    descripcion:
+        'Filete fresco de trucha a la plancha con limón criollo, arroz blanco y papas doradas.',
+    region: 'La Paz',
+    imagenUrl: 'assets/images/11_tortilla_de_verduras.jpg',
+    categoria: 'Especial',
+  ),
+  DishOptionItem(
+    nombre: 'Picante Mixto Especial',
+    descripcion:
+        'Combinación de pollo en ají amarillo y lengua de res en ají rojo con chuño phuti.',
+    region: 'Chuquisaca / Cochabamba',
+    imagenUrl: 'assets/images/09_locro_de_zapallo.jpg',
+    categoria: 'Especial',
+  ),
+  DishOptionItem(
+    nombre: 'Lomo Montado Tradicional',
+    descripcion:
+        'Corte tierno de lomo con doble huevo frito, arroz blanco, papas fritas y ensalada fresca.',
+    region: 'Nacional',
+    imagenUrl: 'assets/images/01_silpancho.jpg',
+    categoria: 'Especial',
+  ),
+];
+
+class SopaBolivianaItem {
+  final String nombre;
+  final String descripcion;
+  final String region;
+  final String imagenUrl;
+
+  const SopaBolivianaItem({
+    required this.nombre,
+    required this.descripcion,
+    required this.region,
+    required this.imagenUrl,
+  });
+}
+
+const List<SopaBolivianaItem> defaultSopasBolivianas = [
+  SopaBolivianaItem(
+    nombre: 'Sopa de Maní Tradicional',
+    descripcion:
+        'Sopa cremosa tradicional a base de maní molido, costilla de res, verduras y papas al hilo.',
+    region: 'Cochabamba / Nacional',
+    imagenUrl: 'assets/images/04_sopa_de_mani.jpg',
+  ),
+  SopaBolivianaItem(
+    nombre: 'Chairo Paceño',
+    descripcion:
+        'Sopa andina sustanciosa con chuño machacado, chalona, carne de res, trigo pelado y hierbabuena.',
+    region: 'La Paz',
+    imagenUrl: 'assets/images/08_crema_de_quinua.jpg',
+  ),
+  SopaBolivianaItem(
+    nombre: 'Crema de Quinua Real',
+    descripcion:
+        'Crema nutritiva de quinua real andina con verduras frescas, queso criollo y un toque de cilantro.',
+    region: 'Potosí / Oruro',
+    imagenUrl: 'assets/images/08_crema_de_quinua.jpg',
+  ),
+  SopaBolivianaItem(
+    nombre: 'Locro de Gallina Tradicional',
+    descripcion:
+        'Caldo aromático del oriente boliviano con presa de gallina criolla, arroz graneado y yuca.',
+    region: 'Santa Cruz',
+    imagenUrl: 'assets/images/09_locro_de_zapallo.jpg',
+  ),
+  SopaBolivianaItem(
+    nombre: 'Caldo de Costilla Criollo',
+    descripcion:
+        'Reconfortante caldo cocinado a fuego lento con costilla jugosa de res, papas y verduras de la huerta.',
+    region: 'Nacional',
+    imagenUrl: 'assets/images/04_sopa_de_mani.jpg',
+  ),
+];
 
 class EmployeeScreen extends ConsumerStatefulWidget {
   const EmployeeScreen({super.key});
@@ -17,7 +224,14 @@ class EmployeeScreen extends ConsumerStatefulWidget {
 
 class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
   DateTime _selectedDate = DateTime.now();
+  bool _isNextBusinessDaySelected = false;
+  MenuCategoryOption _selectedCategoryOption =
+      MenuCategoryOption.almuerzoCompleto;
   String? _selectedDishName;
+  String? _selectedVegDishName;
+  String? _selectedSpecialDishName;
+  String _selectedSaladName = 'Ensalada Fresca del Día';
+  String _selectedSoupName = 'Sopa de Maní Tradicional';
   final TextEditingController _notesController = TextEditingController();
 
   // Modo de reserva:
@@ -37,12 +251,68 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
   @override
   void initState() {
     super.initState();
-    // Iniciar con el siguiente día hábil si hoy es fin de semana
-    if (AppDateUtils.isWeekend(_selectedDate)) {
-      _selectedDate = _selectedDate.add(
-        Duration(days: _selectedDate.weekday == DateTime.saturday ? 2 : 1),
-      );
+    final now = DateTime.now();
+    _selectedDate = DateTime(now.year, now.month, now.day);
+
+    // Después del servicio, las nuevas reservas corresponden al siguiente
+    // día hábil para que el menú mostrado coincida con la fecha reservada.
+    if (now.hour >= ReservationPolicy.deliveryEndHour) {
+      _selectedDate = _nextBusinessDay(_selectedDate);
+      _isNextBusinessDaySelected = true;
+    } else {
+      _selectedDate = _nextBusinessDayIfWeekend(_selectedDate);
     }
+
+    // También cubre el caso viernes por la tarde, cuando el siguiente día
+    // hábil pertenece a la semana siguiente. La actualización se difiere
+    // hasta después del primer frame para no modificar un provider durante
+    // la construcción del árbol de widgets.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(selectedWeekProvider.notifier).setWeek(_selectedDate);
+      }
+    });
+  }
+
+  DateTime _nextBusinessDay(DateTime date) {
+    var nextDate = DateTime(date.year, date.month, date.day + 1);
+    while (AppDateUtils.isWeekend(nextDate)) {
+      nextDate = nextDate.add(const Duration(days: 1));
+    }
+    return nextDate;
+  }
+
+  DateTime _nextBusinessDayIfWeekend(DateTime date) {
+    var businessDate = date;
+    while (AppDateUtils.isWeekend(businessDate)) {
+      businessDate = businessDate.add(const Duration(days: 1));
+    }
+    return businessDate;
+  }
+
+  void _selectReservationDate(
+    DateTime date,
+    List<MenuSemanalItem> dishesForDate,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var targetDate = date;
+    var redirectedAfterService = false;
+
+    if (AppDateUtils.isSameDay(date, today) &&
+        now.hour >= ReservationPolicy.deliveryEndHour) {
+      targetDate = _nextBusinessDay(today);
+      redirectedAfterService = true;
+      ref.read(selectedWeekProvider.notifier).setWeek(targetDate);
+    }
+
+    setState(() {
+      _selectedDate = targetDate;
+      _isNextBusinessDaySelected = redirectedAfterService;
+      if (!redirectedAfterService && dishesForDate.isNotEmpty) {
+        _selectedDishName = dishesForDate.first.platoNombre;
+      }
+    });
   }
 
   @override
@@ -242,6 +512,36 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  if (_isNextBusinessDaySelected) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.schedule, size: 18, color: Colors.orange),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'El servicio de hoy terminó. Se muestra el menú y la reserva para el siguiente día hábil.',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Color(0xFF92400E),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
 
                   // Días de la semana (Lunes a Viernes)
                   publishedMenuAsync.when(
@@ -275,13 +575,7 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                               padding: const EdgeInsets.only(right: 8.0),
                               child: InkWell(
                                 onTap: () {
-                                  setState(() {
-                                    _selectedDate = date;
-                                    if (dishesToday.isNotEmpty) {
-                                      _selectedDishName =
-                                          dishesToday.first.platoNombre;
-                                    }
-                                  });
+                                  _selectReservationDate(date, dishesToday);
                                 },
                                 borderRadius: BorderRadius.circular(16),
                                 child: Container(
@@ -333,26 +627,45 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                                                 : Colors.grey,
                                           ),
                                         )
-                                      else
-                                        ...dishesToday.take(2).map((dish) {
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 2.0,
+                                      else ...[
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          child: _buildDishImageWidget(
+                                            imageUrl:
+                                                dishesToday.first.imagenUrl,
+                                            width: double.infinity,
+                                            height: 54,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
                                             ),
-                                            child: Text(
-                                              '• ${dish.platoNombre}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w500,
-                                                color: isDaySelected
-                                                    ? Colors.white
-                                                    : const Color(0xFF1E293B),
-                                              ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          dishesToday.first.platoNombre,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDaySelected
+                                                ? Colors.white
+                                                : const Color(0xFF1E293B),
+                                          ),
+                                        ),
+                                        if (dishesToday.length > 1)
+                                          Text(
+                                            '+${dishesToday.length - 1} opción más',
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              color: isDaySelected
+                                                  ? Colors.white70
+                                                  : Colors.grey.shade600,
                                             ),
-                                          );
-                                        }),
+                                          ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -422,12 +735,15 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Selector de Plato del día
+                  // Estructura de Categorías del Menú
                   const Text(
-                    'Plato Seleccionado:',
+                    'Categoría del Menú:',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
+                  _buildCategoryTabs(),
+                  const SizedBox(height: 14),
+
                   _buildDishSelector(publishedMenuAsync),
 
                   const SizedBox(height: 16),
@@ -687,6 +1003,125 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
   // WIDGETS AUXILIARES
   // ===========================================================================
 
+  Widget _buildCategoryTabs() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildCategoryTabItem(
+              title: 'Almuerzo Completo',
+              subtitle: 'Ensalada + Sopa + Segundo',
+              icon: Icons.lunch_dining,
+              option: MenuCategoryOption.almuerzoCompleto,
+              selectedColor: const Color(0xFF2563EB),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildCategoryTabItem(
+              title: 'Menú Vegetariano',
+              subtitle: 'Saludable',
+              icon: Icons.eco,
+              option: MenuCategoryOption.vegetariano,
+              selectedColor: Colors.green.shade700,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildCategoryTabItem(
+              title: 'Plato Especial',
+              subtitle: 'Premium',
+              icon: Icons.stars_rounded,
+              option: MenuCategoryOption.platoEspecial,
+              selectedColor: Colors.amber.shade900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryTabItem({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required MenuCategoryOption option,
+    required Color selectedColor,
+  }) {
+    final isSelected = _selectedCategoryOption == option;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedCategoryOption = option;
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+          border: isSelected
+              ? Border.all(
+                  color: selectedColor.withValues(alpha: 0.5),
+                  width: 1.5,
+                )
+              : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? selectedColor : Colors.grey.shade600,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? selectedColor : Colors.grey.shade800,
+              ),
+            ),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 9.5,
+                color: isSelected
+                    ? selectedColor.withValues(alpha: 0.8)
+                    : Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDishSelector(
     AsyncValue<List<MenuSemanalItem>> publishedMenuAsync,
   ) {
@@ -698,21 +1133,117 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
               i.fecha.day == _selectedDate.day;
         }).toList();
 
-        final options = dishesToday.isNotEmpty
-            ? dishesToday.map((d) => d.platoNombre).toSet().toList()
-            : [
-                'Silpancho Cochabambino',
-                'Pique Macho Especial',
-                'Majadito Cruceño',
-                'Sopa de Maní Tradicional',
-                'Almuerzo Completo del Día',
-              ];
-
-        if (_selectedDishName == null || !options.contains(_selectedDishName)) {
-          _selectedDishName = options.first;
+        switch (_selectedCategoryOption) {
+          case MenuCategoryOption.almuerzoCompleto:
+            return _buildAlmuerzoCompletoSection(dishesToday, items);
+          case MenuCategoryOption.vegetariano:
+            return _buildVegetarianoSection(dishesToday, items);
+          case MenuCategoryOption.platoEspecial:
+            return _buildPlatoEspecialSection(dishesToday, items);
         }
+      },
+      loading: () => const LinearProgressIndicator(),
+      error: (e, stack) => const Text('Error al cargar platos'),
+    );
+  }
 
-        return DropdownButtonFormField<String>(
+  Widget _buildAlmuerzoCompletoSection(
+    List<MenuSemanalItem> dishesToday,
+    List<MenuSemanalItem> allItems,
+  ) {
+    final secondDishesToday = dishesToday
+        .where((d) => _isSecond(d.tipoPlato))
+        .toList();
+    final soupDishesToday = dishesToday
+        .where((d) => _isSoup(d.tipoPlato))
+        .toList();
+    final options = secondDishesToday.isNotEmpty
+        ? secondDishesToday.map((d) => d.platoNombre).toSet().toList()
+        : defaultPlatosFuertes.map((d) => d.nombre).toList();
+    final soupOptions = soupDishesToday.isNotEmpty
+        ? soupDishesToday.map((d) => d.platoNombre).toList()
+        : defaultSopasBolivianas.map((s) => s.nombre).toList();
+    final saladDishesToday = dishesToday
+        .where((d) => _isSalad(d.tipoPlato))
+        .toList();
+    final saladOptions = saladDishesToday.isNotEmpty
+        ? saladDishesToday.map((d) => d.platoNombre).toList()
+        : defaultEnsaladas.map((s) => s.nombre).toList();
+    if (!saladOptions.contains(_selectedSaladName)) {
+      _selectedSaladName = saladOptions.first;
+    }
+    if (!soupOptions.contains(_selectedSoupName)) {
+      _selectedSoupName = soupOptions.first;
+    }
+
+    if (_selectedDishName == null || !options.contains(_selectedDishName)) {
+      _selectedDishName = options.first;
+    }
+
+    final (
+      selectedImg,
+      selectedDesc,
+      selectedCategory,
+      selectedRegion,
+    ) = _resolveDishInfo(
+      dishName: _selectedDishName!,
+      dishesToday: dishesToday,
+      allItems: allItems,
+      fallbackList: defaultPlatosFuertes,
+      defaultCategory: 'Segundo',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Almuerzo Completo: Entrada + Sopa del día + Segundo',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          '1. Entrada / Ensalada:',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          key: ValueKey(
+            'salad_selector_${_selectedDate.year}_${_selectedDate.month}_${_selectedDate.day}',
+          ),
+          isExpanded: true,
+          initialValue: _selectedSaladName,
+          decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            prefixIcon: const Icon(Icons.eco_outlined),
+          ),
+          items: saladOptions
+              .map(
+                (name) => DropdownMenuItem<String>(
+                  value: name,
+                  child: Text(name, overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) setState(() => _selectedSaladName = value);
+          },
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          '2. Sopa del día:',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        // El selector de sopa permanece dentro del mismo Almuerzo Completo.
+        DropdownButtonFormField<String>(
+          key: ValueKey(
+            'dish_selector_${_selectedDate.year}_${_selectedDate.month}_${_selectedDate.day}',
+          ),
+          isExpanded: true,
           initialValue: _selectedDishName,
           decoration: InputDecoration(
             contentPadding: const EdgeInsets.symmetric(
@@ -720,25 +1251,1136 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
               vertical: 12,
             ),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-            prefixIcon: const Icon(Icons.soup_kitchen_outlined),
+            prefixIcon: const Icon(Icons.lunch_dining_outlined),
           ),
           items: options.map((dishName) {
+            final (img, _, _, _) = _resolveDishInfo(
+              dishName: dishName,
+              dishesToday: dishesToday,
+              allItems: allItems,
+              fallbackList: defaultPlatosFuertes,
+              defaultCategory: 'Segundo',
+            );
+
             return DropdownMenuItem<String>(
               value: dishName,
-              child: Text(
-                dishName,
-                style: const TextStyle(fontSize: 13.5),
-                overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  _buildDishImageWidget(
+                    imageUrl: img,
+                    width: 26,
+                    height: 26,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      dishName,
+                      style: const TextStyle(fontSize: 13.5),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             );
           }).toList(),
           onChanged: (val) {
             if (val != null) setState(() => _selectedDishName = val);
           },
-        );
-      },
-      loading: () => const LinearProgressIndicator(),
-      error: (e, stack) => const Text('Error al cargar platos'),
+        ),
+
+        if (dishesToday.length > 1) ...[
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: secondDishesToday.map((dish) {
+                final isSelected = dish.platoNombre == _selectedDishName;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ChoiceChip(
+                    avatar: _buildDishImageWidget(
+                      imageUrl: dish.imagenUrl,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    label: Text(dish.platoNombre),
+                    selected: isSelected,
+                    selectedColor: const Color(
+                      0xFF2563EB,
+                    ).withValues(alpha: 0.15),
+                    onSelected: (val) {
+                      if (val) {
+                        setState(() => _selectedDishName = dish.platoNombre);
+                      }
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 12),
+
+        // Card visual destacada con la imagen del segundo
+        _buildSelectedDishCard(
+          name: _selectedDishName ?? 'Plato Boliviano',
+          imageUrl: selectedImg,
+          description: selectedDesc,
+          category: selectedCategory,
+          region: selectedRegion,
+        ),
+
+        const SizedBox(height: 16),
+
+        // La sopa y el segundo se registran como un único Almuerzo Completo.
+        Row(
+          children: [
+            const Icon(Icons.soup_kitchen, color: Color(0xFF2563EB), size: 18),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Sopa del día incluida:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Combo Completo',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const Padding(
+          padding: EdgeInsets.only(left: 26, top: 2),
+          child: Text(
+            'Parte del Almuerzo Completo: sopa del día',
+            style: TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          key: ValueKey(
+            'soup_selector_${_selectedDate.year}_${_selectedDate.month}_${_selectedDate.day}',
+          ),
+          isExpanded: true,
+          initialValue: _selectedSoupName,
+          decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            prefixIcon: const Icon(Icons.ramen_dining_outlined),
+          ),
+          items: soupOptions.map((soupName) {
+            final soup = defaultSopasBolivianas.firstWhere(
+              (item) => item.nombre == soupName,
+              orElse: () => SopaBolivianaItem(
+                nombre: soupName,
+                descripcion: 'Sopa del día del menú institucional.',
+                region: 'Bolivia',
+                imagenUrl: '',
+              ),
+            );
+            return DropdownMenuItem<String>(
+              value: soupName,
+              child: Row(
+                children: [
+                  _buildDishImageWidget(
+                    imageUrl: soup.imagenUrl,
+                    width: 26,
+                    height: 26,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      soupName,
+                      style: const TextStyle(fontSize: 13.5),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '(${soup.region.split(' / ').first})',
+                    style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) setState(() => _selectedSoupName = val);
+          },
+        ),
+        const SizedBox(height: 10),
+        _buildSoupCard(
+          defaultSopasBolivianas.firstWhere(
+            (s) => s.nombre == _selectedSoupName,
+            orElse: () => SopaBolivianaItem(
+              nombre: _selectedSoupName,
+              descripcion: 'Sopa del día del menú institucional.',
+              region: 'Bolivia',
+              imagenUrl: '',
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildAlmuerzoCompletoBanner(
+          platoPrincipal: _selectedDishName ?? 'Silpancho Cochabambino',
+          sopa: _selectedSoupName,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVegetarianoSection(
+    List<MenuSemanalItem> dishesToday,
+    List<MenuSemanalItem> allItems,
+  ) {
+    final vegDishesToday = dishesToday
+        .where(
+          (d) =>
+              d.tipoPlato.toLowerCase().contains('veg') ||
+              d.platoNombre.toLowerCase().contains('soya') ||
+              d.platoNombre.toLowerCase().contains('quinua') ||
+              d.platoNombre.toLowerCase().contains('verdura'),
+        )
+        .toList();
+
+    final options = vegDishesToday.isNotEmpty
+        ? vegDishesToday.map((d) => d.platoNombre).toSet().toList()
+        : defaultPlatosVegetarianos.map((d) => d.nombre).toList();
+
+    if (_selectedVegDishName == null ||
+        !options.contains(_selectedVegDishName)) {
+      _selectedVegDishName = options.first;
+    }
+
+    final (
+      selectedImg,
+      selectedDesc,
+      selectedCategory,
+      selectedRegion,
+    ) = _resolveDishInfo(
+      dishName: _selectedVegDishName!,
+      dishesToday: dishesToday,
+      allItems: allItems,
+      fallbackList: defaultPlatosVegetarianos,
+      defaultCategory: 'Vegetariano',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Plato Vegetariano Seleccionado:',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          key: ValueKey(
+            'veg_dish_selector_${_selectedDate.year}_${_selectedDate.month}_${_selectedDate.day}',
+          ),
+          isExpanded: true,
+          initialValue: _selectedVegDishName,
+          decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            prefixIcon: const Icon(Icons.eco_outlined, color: Colors.green),
+          ),
+          items: options.map((dishName) {
+            final (img, _, _, _) = _resolveDishInfo(
+              dishName: dishName,
+              dishesToday: dishesToday,
+              allItems: allItems,
+              fallbackList: defaultPlatosVegetarianos,
+              defaultCategory: 'Vegetariano',
+            );
+
+            return DropdownMenuItem<String>(
+              value: dishName,
+              child: Row(
+                children: [
+                  _buildDishImageWidget(
+                    imageUrl: img,
+                    width: 26,
+                    height: 26,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      dishName,
+                      style: const TextStyle(fontSize: 13.5),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) setState(() => _selectedVegDishName = val);
+          },
+        ),
+
+        if (options.length > 1) ...[
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: options.map((dishName) {
+                final isSelected = dishName == _selectedVegDishName;
+                final (img, _, _, _) = _resolveDishInfo(
+                  dishName: dishName,
+                  dishesToday: dishesToday,
+                  allItems: allItems,
+                  fallbackList: defaultPlatosVegetarianos,
+                  defaultCategory: 'Vegetariano',
+                );
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ChoiceChip(
+                    avatar: _buildDishImageWidget(
+                      imageUrl: img,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    label: Text(dishName),
+                    selected: isSelected,
+                    selectedColor: Colors.green.withValues(alpha: 0.18),
+                    onSelected: (val) {
+                      if (val) {
+                        setState(() => _selectedVegDishName = dishName);
+                      }
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 12),
+
+        // Card visual destacada del plato vegetariano
+        _buildSelectedDishCard(
+          name: _selectedVegDishName ?? 'Plato Vegetariano',
+          imageUrl: selectedImg,
+          description: selectedDesc,
+          category: selectedCategory,
+          region: selectedRegion,
+        ),
+
+        const SizedBox(height: 12),
+
+        _buildVegetarianoBanner(
+          plato: _selectedVegDishName ?? 'Quinua Real con Champiñones y Palta',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPlatoEspecialSection(
+    List<MenuSemanalItem> dishesToday,
+    List<MenuSemanalItem> allItems,
+  ) {
+    final espDishesToday = dishesToday
+        .where(
+          (d) =>
+              d.tipoPlato.toLowerCase().contains('esp') ||
+              d.platoNombre.toLowerCase().contains('especial') ||
+              d.platoNombre.toLowerCase().contains('pique') ||
+              d.platoNombre.toLowerCase().contains('trucha') ||
+              d.platoNombre.toLowerCase().contains('mixto'),
+        )
+        .toList();
+
+    final options = espDishesToday.isNotEmpty
+        ? espDishesToday.map((d) => d.platoNombre).toSet().toList()
+        : defaultPlatosEspeciales.map((d) => d.nombre).toList();
+
+    if (_selectedSpecialDishName == null ||
+        !options.contains(_selectedSpecialDishName)) {
+      _selectedSpecialDishName = options.first;
+    }
+
+    final (
+      selectedImg,
+      selectedDesc,
+      selectedCategory,
+      selectedRegion,
+    ) = _resolveDishInfo(
+      dishName: _selectedSpecialDishName!,
+      dishesToday: dishesToday,
+      allItems: allItems,
+      fallbackList: defaultPlatosEspeciales,
+      defaultCategory: 'Especial',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Plato Especial Seleccionado:',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          key: ValueKey(
+            'special_dish_selector_${_selectedDate.year}_${_selectedDate.month}_${_selectedDate.day}',
+          ),
+          isExpanded: true,
+          initialValue: _selectedSpecialDishName,
+          decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            prefixIcon: const Icon(Icons.stars_outlined, color: Colors.amber),
+          ),
+          items: options.map((dishName) {
+            final (img, _, _, _) = _resolveDishInfo(
+              dishName: dishName,
+              dishesToday: dishesToday,
+              allItems: allItems,
+              fallbackList: defaultPlatosEspeciales,
+              defaultCategory: 'Especial',
+            );
+
+            return DropdownMenuItem<String>(
+              value: dishName,
+              child: Row(
+                children: [
+                  _buildDishImageWidget(
+                    imageUrl: img,
+                    width: 26,
+                    height: 26,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      dishName,
+                      style: const TextStyle(fontSize: 13.5),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) setState(() => _selectedSpecialDishName = val);
+          },
+        ),
+
+        if (options.length > 1) ...[
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: options.map((dishName) {
+                final isSelected = dishName == _selectedSpecialDishName;
+                final (img, _, _, _) = _resolveDishInfo(
+                  dishName: dishName,
+                  dishesToday: dishesToday,
+                  allItems: allItems,
+                  fallbackList: defaultPlatosEspeciales,
+                  defaultCategory: 'Especial',
+                );
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ChoiceChip(
+                    avatar: _buildDishImageWidget(
+                      imageUrl: img,
+                      width: 20,
+                      height: 20,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    label: Text(dishName),
+                    selected: isSelected,
+                    selectedColor: Colors.amber.withValues(alpha: 0.2),
+                    onSelected: (val) {
+                      if (val) {
+                        setState(() => _selectedSpecialDishName = dishName);
+                      }
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 12),
+
+        // Card visual destacada del plato especial
+        _buildSelectedDishCard(
+          name: _selectedSpecialDishName ?? 'Plato Especial',
+          imageUrl: selectedImg,
+          description: selectedDesc,
+          category: selectedCategory,
+          region: selectedRegion,
+        ),
+
+        const SizedBox(height: 12),
+
+        _buildEspecialBanner(
+          plato: _selectedSpecialDishName ?? 'Pique Macho Especial',
+        ),
+      ],
+    );
+  }
+
+  bool _isSecond(String category) {
+    final normalized = category.toLowerCase();
+    return normalized.contains('segundo') ||
+        normalized.contains('fuerte') ||
+        normalized.contains('principal');
+  }
+
+  bool _isSoup(String category) {
+    final normalized = category.toLowerCase();
+    return normalized.contains('sopa');
+  }
+
+  bool _isSalad(String category) {
+    final normalized = category.toLowerCase();
+    return normalized.contains('entrada') || normalized.contains('ensalada');
+  }
+
+  (String, String, String, String) _resolveDishInfo({
+    required String dishName,
+    required List<MenuSemanalItem> dishesToday,
+    required List<MenuSemanalItem> allItems,
+    required List<DishOptionItem> fallbackList,
+    required String defaultCategory,
+  }) {
+    for (final item in dishesToday) {
+      if (item.platoNombre == dishName) {
+        final img = item.imagenUrl.isNotEmpty
+            ? item.imagenUrl
+            : resolveDishImageUrl('', dishName: dishName);
+        final desc = item.platoDescripcion.isNotEmpty
+            ? item.platoDescripcion
+            : 'Plato boliviano disponible en el menú institucional de Supabase.';
+        final cat = item.tipoPlato.isNotEmpty
+            ? item.tipoPlato
+            : defaultCategory;
+        final reg = item.platoRegion.isNotEmpty ? item.platoRegion : 'Bolivia';
+        return (img, desc, cat, reg);
+      }
+    }
+
+    for (final item in allItems) {
+      if (item.platoNombre == dishName) {
+        final img = item.imagenUrl.isNotEmpty
+            ? item.imagenUrl
+            : resolveDishImageUrl('', dishName: dishName);
+        final desc = item.platoDescripcion.isNotEmpty
+            ? item.platoDescripcion
+            : 'Plato boliviano disponible en el menú institucional de Supabase.';
+        final cat = item.tipoPlato.isNotEmpty
+            ? item.tipoPlato
+            : defaultCategory;
+        final reg = item.platoRegion.isNotEmpty ? item.platoRegion : 'Bolivia';
+        return (img, desc, cat, reg);
+      }
+    }
+
+    for (final d in fallbackList) {
+      if (d.nombre == dishName) {
+        return (d.imagenUrl, d.descripcion, d.categoria, d.region);
+      }
+    }
+
+    return (
+      resolveDishImageUrl('', dishName: dishName),
+      'Plato boliviano disponible en el comedor institucional.',
+      defaultCategory,
+      'Bolivia',
+    );
+  }
+
+  Widget _buildVegetarianoBanner({required String plato}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.green.withValues(alpha: 0.09),
+            Colors.teal.withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.green.shade700,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.eco, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '🥗 Menú Vegetariano (Opción Independiente)',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green.shade900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  plato,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green.shade800,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Opción saludable e independiente basada en proteínas vegetales y cereales andinos.',
+                  style: TextStyle(fontSize: 10.5, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEspecialBanner({required String plato}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.amber.withValues(alpha: 0.12),
+            Colors.orange.withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.deepOrange,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.stars_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '⭐ Plato Especial (Categoría Independiente)',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange.shade900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  plato,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.deepOrange.shade800,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Plato tradicional de corte premium elaborado bajo receta especial institucional.',
+                  style: TextStyle(fontSize: 10.5, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlmuerzoCompletoBanner({
+    required String platoPrincipal,
+    required String sopa,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF2563EB).withValues(alpha: 0.08),
+            const Color(0xFF1E40AF).withValues(alpha: 0.04),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF2563EB).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2563EB),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.lunch_dining,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '🍱 Almuerzo Completo (Combo del Día)',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E3A8A),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$platoPrincipal + $sopa',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2563EB),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'El combo pasa a denominarse Almuerzo Completo y se registrará en Supabase.',
+                  style: TextStyle(fontSize: 10.5, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSoupCard(SopaBolivianaItem soup) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              _buildDishImageWidget(
+                imageUrl: soup.imagenUrl,
+                width: double.infinity,
+                height: 110,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.deepOrange,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Sopa Boliviana',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        color: Colors.white,
+                        size: 11,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        soup.region,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        soup.nombre,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'Gastronomía Boliviana',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          color: Colors.deepOrange,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  soup.descripcion,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: Colors.grey.shade600,
+                    height: 1.3,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedDishCard({
+    required String name,
+    required String imageUrl,
+    required String description,
+    required String category,
+    required String region,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              _buildDishImageWidget(
+                imageUrl: imageUrl,
+                width: double.infinity,
+                height: 145,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
+              ),
+              Positioned(
+                top: 10,
+                left: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    category,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        color: Colors.white,
+                        size: 12,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        region,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.cloud_done, color: Colors.green, size: 12),
+                          SizedBox(width: 4),
+                          Text(
+                            'Supabase',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      height: 1.35,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDishImageWidget({
+    required String imageUrl,
+    required double width,
+    required double height,
+    BorderRadius? borderRadius,
+  }) {
+    final radius = borderRadius ?? BorderRadius.circular(12);
+    final isNetwork =
+        imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
+
+    Widget imageWidget;
+    if (isNetwork) {
+      imageWidget = Image.network(
+        imageUrl,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            _buildDishImagePlaceholder(width, height),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            width: width,
+            height: height,
+            color: Colors.grey.shade200,
+            child: const Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      final assetPath = imageUrl.isNotEmpty
+          ? (imageUrl.startsWith('assets/')
+                ? imageUrl
+                : 'assets/images/$imageUrl')
+          : 'assets/images/01_silpancho.jpg';
+
+      imageWidget = Image.asset(
+        assetPath,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            _buildDishImagePlaceholder(width, height),
+      );
+    }
+
+    return ClipRRect(borderRadius: radius, child: imageWidget);
+  }
+
+  Widget _buildDishImagePlaceholder(double width, double height) {
+    return Container(
+      width: width,
+      height: height,
+      color: Colors.blue.shade50,
+      child: const Center(
+        child: Icon(Icons.restaurant, color: Color(0xFF2563EB), size: 22),
+      ),
     );
   }
 
@@ -775,7 +2417,7 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
             children: [
               const Expanded(
                 child: Text(
-                  'Desglose y Costo Total:',
+                  'Desglose y Subtotal:',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -816,6 +2458,19 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            _getSummaryOptionText(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isPlanMensual
+                  ? Colors.green.shade900
+                  : Colors.deepOrange.shade900,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
           const Divider(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -845,6 +2500,17 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
     );
   }
 
+  String _getSummaryOptionText() {
+    switch (_selectedCategoryOption) {
+      case MenuCategoryOption.almuerzoCompleto:
+        return '• Almuerzo Completo: Ensalada ($_selectedSaladName) + Sopa del día ($_selectedSoupName) + Segundo (${_selectedDishName ?? "Silpancho Cochabambino"})';
+      case MenuCategoryOption.vegetariano:
+        return '• Menú Vegetariano: ${_selectedVegDishName ?? "Quinua Real con Champiñones y Palta"}';
+      case MenuCategoryOption.platoEspecial:
+        return '• Plato Especial: ${_selectedSpecialDishName ?? "Pique Macho Especial"}';
+    }
+  }
+
   Future<void> _handleConfirmReservation(
     BuildContext context,
     double tariffPrice,
@@ -853,7 +2519,42 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
     final currentUser = ref.read(authProvider);
     final userId = currentUser?.id ?? 'demo-user-123';
     final userName = currentUser?.fullName ?? 'Empleado';
-    final dish = _selectedDishName ?? 'Silpancho Cochabambino';
+
+    final String comboName;
+    final String? entrada;
+    final String platoPrincipal;
+    final String? sopa;
+    final bool isAlmuerzoCompleto;
+    final ReservationMenuCategory menuCategory;
+
+    switch (_selectedCategoryOption) {
+      case MenuCategoryOption.almuerzoCompleto:
+        entrada = _selectedSaladName;
+        platoPrincipal = _selectedDishName ?? 'Silpancho Cochabambino';
+        sopa = _selectedSoupName;
+        comboName = 'Almuerzo Completo ($entrada + $sopa + $platoPrincipal)';
+        isAlmuerzoCompleto = true;
+        menuCategory = ReservationMenuCategory.almuerzoCompleto;
+        break;
+      case MenuCategoryOption.vegetariano:
+        entrada = null;
+        platoPrincipal =
+            _selectedVegDishName ?? 'Quinua Real con Champiñones y Palta';
+        sopa = null;
+        comboName = 'Menú Vegetariano ($platoPrincipal)';
+        isAlmuerzoCompleto = false;
+        menuCategory = ReservationMenuCategory.menuVegetariano;
+        break;
+      case MenuCategoryOption.platoEspecial:
+        entrada = null;
+        platoPrincipal = _selectedSpecialDishName ?? 'Pique Macho Especial';
+        sopa = null;
+        comboName = 'Plato Especial ($platoPrincipal)';
+        isAlmuerzoCompleto = false;
+        menuCategory = ReservationMenuCategory.platoEspecial;
+        break;
+    }
+
     final notes = _notesController.text.trim();
 
     // Validar selección
@@ -881,7 +2582,12 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
             .read(userReservationsProvider.notifier)
             .createJointReservations(
               date: _selectedDate,
-              dishName: dish,
+              dishName: comboName,
+              entradaNombre: entrada,
+              platoPrincipal: platoPrincipal,
+              sopaNombre: sopa,
+              isAlmuerzoCompleto: isAlmuerzoCompleto,
+              menuCategory: menuCategory,
               reserveForEmployee: _includeEmployee,
               selectedFamiliarIds: _selectedFamiliarIds.toList(),
               familiarNames: famNames,
@@ -893,22 +2599,10 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
 
         if (context.mounted) {
           final total = createdCount * tariffPrice;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '¡Reserva conjunta confirmada ($createdCount comensales)! Total: Bs. ${total.toStringAsFixed(2)}',
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green.shade700,
-              behavior: SnackBarBehavior.floating,
-            ),
+          _showReservationConfirmation(
+            title: 'Reserva confirmada',
+            detail:
+                '$createdCount comensales · $comboName\nTotal: Bs. ${total.toStringAsFixed(2)}',
           );
           _notesController.clear();
         }
@@ -923,7 +2617,12 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
             .read(userReservationsProvider.notifier)
             .createReservation(
               date: _selectedDate,
-              dishName: dish,
+              dishName: comboName,
+              entradaNombre: entrada,
+              platoPrincipal: platoPrincipal,
+              sopaNombre: sopa,
+              isAlmuerzoCompleto: isAlmuerzoCompleto,
+              menuCategory: menuCategory,
               familiarId: _individualFamiliar?.id,
               beneficiaryName: beneficiary,
               price: tariffPrice,
@@ -933,22 +2632,10 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
             );
 
         if (context.mounted && success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '¡Reserva confirmada para $beneficiary! (Tarifa: Bs. ${tariffPrice.toStringAsFixed(2)})',
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green.shade700,
-              behavior: SnackBarBehavior.floating,
-            ),
+          _showReservationConfirmation(
+            title: 'Reserva confirmada',
+            detail:
+                '$beneficiary · $comboName\nTotal: Bs. ${tariffPrice.toStringAsFixed(2)}',
           );
           _notesController.clear();
         }
@@ -967,6 +2654,74 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
         setState(() => _isSubmitting = false);
       }
     }
+  }
+
+  void _showReservationConfirmation({
+    required String title,
+    required String detail,
+  }) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          elevation: 8,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          backgroundColor: const Color(0xFF166534),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  color: Colors.white,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      detail,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: messenger.hideCurrentSnackBar,
+          ),
+        ),
+      );
   }
 
   Future<void> _confirmSignOut() async {

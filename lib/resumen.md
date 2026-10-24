@@ -31,7 +31,10 @@ El proyecto implementa estrictamente Clean Architecture orientada a funcionalida
   - Data: `SupabaseAuthRepository` con login/registro JWT y cuentas demo integradas para prueba instantánea.
   - Presentation: `ProfileScreen` con login, registro, resumen de cuenta, cambiador de roles demo, y acceso directo a los paneles especializados.
 - **Administración & Reportes (`features/admin`):**
-  - `EncargadoScreen`: Panel de cocina con pedidos del día, métricas en tiempo real (total, pendientes, entregados), buscador de comensales y botón "Entregar".
+  - `KitchenScreen`: Panel de cocina con calendario de reservas, pedidos del día, total de almuerzos, cobro acumulado por empleado/familia, métricas en tiempo real y entrega bloqueada fuera del horario de servicio (12:00 a 14:00).
+    - Incluye pestañas separadas para empleados con plan mensual y empleados regulares sin plan mensual. Cada empleado se agrupa en una sola ficha con reservas propias, reservas de familiares y total de almuerzos.
+    - El planificador de menú muestra imágenes del catálogo y permite agregar (`+`) o quitar (`−`) platos por día antes de publicar.
+  - Cada reserva genera un ticket digital con QR individual para validar el retiro.
   - `InstitucionScreen`: Métricas de consumo global, porcentaje de pensionados vs libres, balance presupuestario y desglose por departamentos.
 
 ## 3. Reglas de Negocio Implementadas y Testeadas

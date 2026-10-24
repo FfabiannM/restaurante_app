@@ -7,10 +7,12 @@ final authRepositoryProvider = Provider<SupabaseAuthRepository>((ref) {
 });
 
 class AuthNotifier extends Notifier<UserProfile?> {
+  String? lastError;
+
   @override
   UserProfile? build() {
     Future.microtask(() => checkCurrentUser());
-    return SupabaseAuthRepository.demoEmpleado;
+    return null;
   }
 
   Future<void> checkCurrentUser() async {
@@ -21,11 +23,13 @@ class AuthNotifier extends Notifier<UserProfile?> {
 
   Future<bool> signIn(String email, String password) async {
     try {
+      lastError = null;
       final repo = ref.read(authRepositoryProvider);
       final user = await repo.signInWithEmailPassword(email, password);
       state = user;
       return true;
-    } catch (_) {
+    } catch (e) {
+      lastError = e.toString();
       return false;
     }
   }
@@ -37,6 +41,7 @@ class AuthNotifier extends Notifier<UserProfile?> {
     required String role,
   }) async {
     try {
+      lastError = null;
       final repo = ref.read(authRepositoryProvider);
       final user = await repo.signUpWithEmailPassword(
         email: email,
@@ -44,9 +49,10 @@ class AuthNotifier extends Notifier<UserProfile?> {
         fullName: fullName,
         role: role,
       );
-      state = user;
+      state = repo.hasActiveSession ? user : null;
       return true;
-    } catch (_) {
+    } catch (e) {
+      lastError = e.toString();
       return false;
     }
   }

@@ -122,6 +122,12 @@ class SupabaseReservationRepository implements ReservationRepository {
         if (map['dishes'] != null && map['dishes']['name'] != null) {
           map['dish_name'] = map['dishes']['name'];
         }
+        if (map['dish_name'] != null &&
+            !map['dish_name'].toString().contains('Almuerzo Completo') &&
+            map['plato_principal'] != null) {
+          map['dish_name'] =
+              'Almuerzo Completo (${map['plato_principal']} + ${map['sopa_nombre'] ?? "Sopa de Maní Tradicional"})';
+        }
         return Reservation.fromJson(map);
       }).toList();
     } catch (e1) {
@@ -133,12 +139,15 @@ class SupabaseReservationRepository implements ReservationRepository {
             .order('fecha', ascending: false);
         final List<dynamic> data = response as List<dynamic>;
         return data
-            .map((item) =>
-                Reservation.fromJson(Map<String, dynamic>.from(item as Map)))
+            .map(
+              (item) =>
+                  Reservation.fromJson(Map<String, dynamic>.from(item as Map)),
+            )
             .toList();
       } catch (e2) {
         debugPrint(
-            '⚠️ Error al consultar reservas del usuario en Supabase ($e1, $e2). Retornando memoria.');
+          '⚠️ Error al consultar reservas del usuario en Supabase ($e1, $e2). Retornando memoria.',
+        );
         return _inMemoryReservations
             .where((r) => r.userId == userId || userId == 'demo-user-123')
             .toList()
@@ -159,6 +168,49 @@ class SupabaseReservationRepository implements ReservationRepository {
           .toList();
     }
 
+    Future<List<Reservation>> withMonthlyPlanOrders(
+      List<Reservation> reservations,
+    ) async {
+      try {
+        final monthlyResponse = await client
+            .from('usuarios')
+            .select(
+              'id, nombres, apellidos, email, rol, has_monthly_plan, activo',
+            )
+            .eq('has_monthly_plan', true)
+            .eq('rol', 'EMPLEADO');
+
+        final existingUserIds = reservations.map((r) => r.userId).toSet();
+        final monthlyOrders = (monthlyResponse as List<dynamic>)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .where((user) => !existingUserIds.contains(user['id'].toString()))
+            .map(
+              (user) => Reservation(
+                id: 'monthly-${user['id']}-$dateStr',
+                userId: user['id'].toString(),
+                userName: '${user['nombres'] ?? ''} ${user['apellidos'] ?? ''}'
+                    .trim(),
+                beneficiaryName:
+                    '${user['nombres'] ?? ''} ${user['apellidos'] ?? ''}'
+                        .trim(),
+                dishName: 'Almuerzo Completo del Día',
+                date: date,
+                type: 'pension',
+                status: 'confirmada',
+                price: 15.0,
+                notes: 'Plan Mensual',
+                createdAt: date,
+              ),
+            )
+            .toList();
+
+        return [...reservations, ...monthlyOrders];
+      } catch (e) {
+        debugPrint('ℹ️ No se pudieron cargar empleados con Plan Mensual: $e');
+        return reservations;
+      }
+    }
+
     // 1. Intentar consultar 'reservations' con joins de platos y perfiles
     try {
       final response = await client
@@ -167,7 +219,7 @@ class SupabaseReservationRepository implements ReservationRepository {
           .eq('reservation_date', dateStr);
 
       final List<dynamic> data = response as List<dynamic>;
-      return data.map((item) {
+      final reservations = data.map((item) {
         final map = Map<String, dynamic>.from(item as Map);
         if (map['dishes'] != null && map['dishes']['name'] != null) {
           map['dish_name'] = map['dishes']['name'];
@@ -177,9 +229,11 @@ class SupabaseReservationRepository implements ReservationRepository {
         }
         return Reservation.fromJson(map);
       }).toList();
+      return withMonthlyPlanOrders(reservations);
     } catch (e1) {
       debugPrint(
-          'ℹ️ Fallback 1: No se pudo consultar reservations con relaciones ($e1). Probando sin relaciones.');
+        'ℹ️ Fallback 1: No se pudo consultar reservations con relaciones ($e1). Probando sin relaciones.',
+      );
 
       // 2. Intentar consultar 'reservations' sin relaciones
       try {
@@ -188,26 +242,37 @@ class SupabaseReservationRepository implements ReservationRepository {
             .select()
             .eq('reservation_date', dateStr);
         final List<dynamic> data = response as List<dynamic>;
-        return data
-            .map((item) =>
-                Reservation.fromJson(Map<String, dynamic>.from(item as Map)))
+        final reservations = data
+            .map(
+              (item) =>
+                  Reservation.fromJson(Map<String, dynamic>.from(item as Map)),
+            )
             .toList();
+        return withMonthlyPlanOrders(reservations);
       } catch (e2) {
         debugPrint(
-            'ℹ️ Fallback 2: No se pudo consultar tabla reservations ($e2). Probando tabla reservas.');
+          'ℹ️ Fallback 2: No se pudo consultar tabla reservations ($e2). Probando tabla reservas.',
+        );
 
         // 3. Intentar consultar tabla 'reservas' (esquema DDL principal)
         try {
-          final response =
-              await client.from('reservas').select().eq('fecha', dateStr);
+          final response = await client
+              .from('reservas')
+              .select()
+              .eq('fecha', dateStr);
           final List<dynamic> data = response as List<dynamic>;
-          return data
-              .map((item) =>
-                  Reservation.fromJson(Map<String, dynamic>.from(item as Map)))
+          final reservations = data
+              .map(
+                (item) => Reservation.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ),
+              )
               .toList();
+          return withMonthlyPlanOrders(reservations);
         } catch (e3) {
           debugPrint(
-              '⚠️ Error al consultar reservas en Supabase ($e3). Retornando datos en memoria.');
+            '⚠️ Error al consultar reservas en Supabase ($e3). Retornando datos en memoria.',
+          );
           return _inMemoryReservations
               .where((r) => AppDateUtils.isSameDay(r.date, date))
               .toList();
@@ -219,8 +284,9 @@ class SupabaseReservationRepository implements ReservationRepository {
   @override
   Future<void> createReservation(Reservation reservation) async {
     // Almacenar en memoria primero para reactividad inmediata
-    final existingIdx =
-        _inMemoryReservations.indexWhere((r) => r.id == reservation.id);
+    final existingIdx = _inMemoryReservations.indexWhere(
+      (r) => r.id == reservation.id,
+    );
     if (existingIdx != -1) {
       _inMemoryReservations[existingIdx] = reservation;
     } else {
@@ -235,11 +301,27 @@ class SupabaseReservationRepository implements ReservationRepository {
     final dateStr =
         "${reservation.date.year.toString().padLeft(4, '0')}-${reservation.date.month.toString().padLeft(2, '0')}-${reservation.date.day.toString().padLeft(2, '0')}";
 
+    // Nombre estructurado según categoría del menú
+    final comboDishName = reservation.dishName.isNotEmpty
+        ? reservation.dishName
+        : (reservation.isAlmuerzoCompleto
+              ? 'Almuerzo Completo (${reservation.entradaNombre ?? "Ensalada Fresca del Día"} + ${reservation.sopaNombre ?? "Sopa del día"} + ${reservation.platoPrincipal ?? "Segundo"})'
+              : (reservation.platoPrincipal ?? 'Plato del Día'));
+
     try {
+      // 1. Intento primario con columnas dedicadas para Almuerzo Completo en Supabase
       final payload = {
         'id': reservation.id,
         'user_id': reservation.userId,
         if (_isUuid(reservation.dishId)) 'dish_id': reservation.dishId,
+        'dish_name': comboDishName,
+        'entrada_nombre': reservation.entradaNombre,
+        'ensalada_nombre': reservation.entradaNombre,
+        'plato_principal': reservation.platoPrincipal ?? reservation.dishName,
+        'sopa_nombre': reservation.sopaNombre,
+        'es_almuerzo_completo': reservation.isAlmuerzoCompleto,
+        'menu_category': reservation.menuCategory.wireValue,
+        'categoria_menu': reservation.menuCategory.label,
         'reservation_date': dateStr,
         'type': reservation.type,
         'status': reservation.status,
@@ -252,24 +334,54 @@ class SupabaseReservationRepository implements ReservationRepository {
 
       await client.from('reservations').insert(payload);
     } catch (e1) {
-      // Intentar en tabla 'reservas' si falla 'reservations'
+      // 2. Fallback de compatibilidad: Por si aún no se corrió la migración de nuevas columnas
       try {
-        final payloadReservas = {
-          'empleado_id': reservation.userId,
-          if (reservation.familiarId != null &&
-              int.tryParse(reservation.familiarId!) != null)
-            'familiar_id': int.tryParse(reservation.familiarId!),
-          'fecha': dateStr,
-          'estado': reservation.status.toUpperCase(),
-          'tipo_tarifa':
-              reservation.price <= 15 ? 'PLAN_MENSUAL' : 'PARTICULAR',
-          'precio': reservation.price,
-          'notas': reservation.notes,
+        final payloadFallback = {
+          'id': reservation.id,
+          'user_id': reservation.userId,
+          if (_isUuid(reservation.dishId)) 'dish_id': reservation.dishId,
+          'reservation_date': dateStr,
+          'type': reservation.type,
+          'status': reservation.status,
+          if (reservation.familiarId != null)
+            'familiar_id': reservation.familiarId,
+          'beneficiary_name': reservation.displayName,
+          'price': reservation.price,
+          'notes': [
+            if (reservation.notes != null && reservation.notes!.isNotEmpty)
+              reservation.notes,
+            'Categoría: ${reservation.menuCategory.label}',
+            'Combo: $comboDishName',
+          ].join(' | '),
         };
-        await client.from('reservas').insert(payloadReservas);
+        await client.from('reservations').insert(payloadFallback);
       } catch (e2) {
-        debugPrint(
-            '⚠️ Error al guardar reserva en Supabase ($e1, $e2). Guardada en memoria.');
+        // 3. Fallback hacia tabla alternativa 'reservas'
+        try {
+          final payloadReservas = {
+            'empleado_id': reservation.userId,
+            if (reservation.familiarId != null &&
+                int.tryParse(reservation.familiarId!) != null)
+              'familiar_id': int.tryParse(reservation.familiarId!),
+            'fecha': dateStr,
+            'estado': reservation.status.toUpperCase(),
+            'tipo_tarifa': reservation.price <= 15
+                ? 'PLAN_MENSUAL'
+                : 'PARTICULAR',
+            'precio': reservation.price,
+            'notas': [
+              if (reservation.notes != null && reservation.notes!.isNotEmpty)
+                reservation.notes,
+              'Categoría: ${reservation.menuCategory.label}',
+              'Combo: $comboDishName',
+            ].join(' | '),
+          };
+          await client.from('reservas').insert(payloadReservas);
+        } catch (e3) {
+          debugPrint(
+            '⚠️ Error al guardar reserva en Supabase ($e1, $e2, $e3). Guardada en memoria.',
+          );
+        }
       }
     }
   }
@@ -341,7 +453,9 @@ class SupabaseReservationRepository implements ReservationRepository {
             .update({'estado': status.toUpperCase()})
             .eq('id', reservationId);
       } catch (e2) {
-        debugPrint('⚠️ Error al actualizar estado de reserva en Supabase: $e1, $e2');
+        debugPrint(
+          '⚠️ Error al actualizar estado de reserva en Supabase: $e1, $e2',
+        );
       }
     }
   }

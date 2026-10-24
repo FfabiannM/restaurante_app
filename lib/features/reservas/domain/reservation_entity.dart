@@ -1,11 +1,68 @@
+enum ReservationMenuCategory {
+  almuerzoCompleto,
+  menuVegetariano,
+  platoEspecial,
+}
+
+extension ReservationMenuCategoryLabel on ReservationMenuCategory {
+  String get label {
+    switch (this) {
+      case ReservationMenuCategory.almuerzoCompleto:
+        return 'Almuerzo Completo';
+      case ReservationMenuCategory.menuVegetariano:
+        return 'Menú Vegetariano';
+      case ReservationMenuCategory.platoEspecial:
+        return 'Plato Especial';
+    }
+  }
+
+  String get wireValue {
+    switch (this) {
+      case ReservationMenuCategory.almuerzoCompleto:
+        return 'almuerzo_completo';
+      case ReservationMenuCategory.menuVegetariano:
+        return 'menu_vegetariano';
+      case ReservationMenuCategory.platoEspecial:
+        return 'plato_especial';
+    }
+  }
+
+  static ReservationMenuCategory fromWireValue(String? value) {
+    final normalized = value?.toLowerCase() ?? '';
+    if (normalized.contains('veget')) {
+      return ReservationMenuCategory.menuVegetariano;
+    }
+    if (normalized.contains('especial')) {
+      return ReservationMenuCategory.platoEspecial;
+    }
+    switch (normalized) {
+      case 'menu_vegetariano':
+      case 'vegetariano':
+        return ReservationMenuCategory.menuVegetariano;
+      case 'plato_especial':
+      case 'especial':
+        return ReservationMenuCategory.platoEspecial;
+      default:
+        return ReservationMenuCategory.almuerzoCompleto;
+    }
+  }
+}
+
 class Reservation {
   final String id;
   final String userId;
   final String userName;
   final String? familiarId; // ID del familiar en Supabase (public.familiares)
-  final String? beneficiaryName; // Nombre del beneficiario (Empleado o Familiar)
+  final String?
+  beneficiaryName; // Nombre del beneficiario (Empleado o Familiar)
   final String? dishId;
   final String dishName;
+  final String? entradaNombre; // Ensalada de entrada del combo
+  final String? platoPrincipal; // Segundo de gastronomía boliviana
+  final String? sopaNombre; // Sopa típica de la gastronomía boliviana incluida
+  final bool
+  isAlmuerzoCompleto; // Combo Almuerzo Completo (Ensalada + Sopa + Segundo)
+  final ReservationMenuCategory menuCategory;
   final DateTime date;
   final String type; // 'diaria' o 'pension'
   final String status; // 'confirmada', 'cancelada', 'entregada'
@@ -21,6 +78,11 @@ class Reservation {
     this.beneficiaryName,
     this.dishId,
     this.dishName = 'Almuerzo Completo del Día',
+    this.entradaNombre,
+    this.platoPrincipal,
+    this.sopaNombre,
+    this.isAlmuerzoCompleto = true,
+    this.menuCategory = ReservationMenuCategory.almuerzoCompleto,
     required this.date,
     this.type = 'diaria',
     this.status = 'confirmada',
@@ -44,6 +106,11 @@ class Reservation {
     String? beneficiaryName,
     String? dishId,
     String? dishName,
+    String? entradaNombre,
+    String? platoPrincipal,
+    String? sopaNombre,
+    bool? isAlmuerzoCompleto,
+    ReservationMenuCategory? menuCategory,
     DateTime? date,
     String? type,
     String? status,
@@ -59,6 +126,11 @@ class Reservation {
       beneficiaryName: beneficiaryName ?? this.beneficiaryName,
       dishId: dishId ?? this.dishId,
       dishName: dishName ?? this.dishName,
+      entradaNombre: entradaNombre ?? this.entradaNombre,
+      platoPrincipal: platoPrincipal ?? this.platoPrincipal,
+      sopaNombre: sopaNombre ?? this.sopaNombre,
+      isAlmuerzoCompleto: isAlmuerzoCompleto ?? this.isAlmuerzoCompleto,
+      menuCategory: menuCategory ?? this.menuCategory,
       date: date ?? this.date,
       type: type ?? this.type,
       status: status ?? this.status,
@@ -69,6 +141,31 @@ class Reservation {
   }
 
   factory Reservation.fromJson(Map<String, dynamic> json) {
+    final principal =
+        json['plato_principal']?.toString() ?? json['segundo']?.toString();
+    final sopa = json['sopa_nombre']?.toString() ?? json['sopa']?.toString();
+    final entrada =
+        json['entrada_nombre']?.toString() ??
+        json['ensalada_nombre']?.toString();
+    String rawDish =
+        json['dish_name']?.toString() ?? json['plato_nombre']?.toString() ?? '';
+
+    if (rawDish.isEmpty) {
+      if (principal != null && sopa != null) {
+        rawDish = 'Almuerzo Completo ($principal + $sopa)';
+      } else if (principal != null) {
+        rawDish = 'Almuerzo Completo ($principal)';
+      } else {
+        rawDish = 'Almuerzo Completo del Día';
+      }
+    }
+
+    final category = ReservationMenuCategoryLabel.fromWireValue(
+      json['menu_category']?.toString() ??
+          json['categoria_menu']?.toString() ??
+          rawDish,
+    );
+
     return Reservation(
       id: json['id']?.toString() ?? '',
       userId: (json['empleado_id'] ?? json['user_id'])?.toString() ?? '',
@@ -76,23 +173,35 @@ class Reservation {
       familiarId: json['familiar_id']?.toString(),
       beneficiaryName: json['beneficiary_name']?.toString(),
       dishId: json['dish_id']?.toString(),
-      dishName: json['dish_name']?.toString() ?? 'Almuerzo Completo',
+      dishName: rawDish,
+      entradaNombre: entrada,
+      platoPrincipal: principal,
+      sopaNombre: sopa,
+      isAlmuerzoCompleto:
+          json['es_almuerzo_completo'] == true ||
+          json['is_almuerzo_completo'] == true ||
+          rawDish.contains('Almuerzo Completo') ||
+          category == ReservationMenuCategory.almuerzoCompleto,
+      menuCategory: category,
       date: json['reservation_date'] != null
           ? DateTime.parse(json['reservation_date'] as String)
           : json['fecha'] != null
-              ? DateTime.parse(json['fecha'] as String)
-              : DateTime.now(),
+          ? DateTime.parse(json['fecha'] as String)
+          : DateTime.now(),
       type: json['tipo'] ?? json['type'] ?? 'diaria',
-      status: (json['estado'] ?? json['status'])?.toString().toLowerCase() ?? 'confirmada',
-      price: (json['precio'] as num?)?.toDouble() ??
+      status:
+          (json['estado'] ?? json['status'])?.toString().toLowerCase() ??
+          'confirmada',
+      price:
+          (json['precio'] as num?)?.toDouble() ??
           (json['price'] as num?)?.toDouble() ??
           18.0,
       notes: json['notes'] as String? ?? json['notas'] as String?,
       createdAt: json['creado_en'] != null
           ? DateTime.parse(json['creado_en'] as String)
           : json['created_at'] != null
-              ? DateTime.parse(json['created_at'] as String)
-              : DateTime.now(),
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
     );
   }
 
@@ -107,6 +216,13 @@ class Reservation {
       'beneficiary_name': beneficiaryName ?? userName,
       'dish_id': dishId,
       'dish_name': dishName,
+      'entrada_nombre': entradaNombre,
+      'ensalada_nombre': entradaNombre,
+      'plato_principal': platoPrincipal,
+      'sopa_nombre': sopaNombre,
+      'es_almuerzo_completo': isAlmuerzoCompleto,
+      'menu_category': menuCategory.wireValue,
+      'categoria_menu': menuCategory.label,
       'reservation_date': dateStr,
       'fecha': dateStr,
       'type': type,

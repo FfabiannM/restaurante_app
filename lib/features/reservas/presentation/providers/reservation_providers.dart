@@ -121,6 +121,12 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
     required DateTime date,
     String? dishId,
     String? dishName,
+    String? entradaNombre,
+    String? platoPrincipal,
+    String? sopaNombre,
+    bool isAlmuerzoCompleto = true,
+    ReservationMenuCategory menuCategory =
+        ReservationMenuCategory.almuerzoCompleto,
     String? familiarId,
     String? beneficiaryName,
     String? notes,
@@ -131,6 +137,12 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
   }) async {
     try {
       final repo = ref.read(reservationRepositoryProvider);
+      final finalDishName =
+          dishName ??
+          (platoPrincipal != null && sopaNombre != null
+              ? 'Almuerzo Completo (${entradaNombre ?? "Ensalada Fresca del Día"} + $sopaNombre + $platoPrincipal)'
+              : 'Almuerzo Completo del Día');
+
       final newRes = Reservation(
         id: const Uuid().v4(),
         userId: userId,
@@ -138,7 +150,12 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
         familiarId: familiarId,
         beneficiaryName: beneficiaryName ?? userName,
         dishId: dishId,
-        dishName: dishName ?? 'Almuerzo Completo del Día',
+        dishName: finalDishName,
+        entradaNombre: entradaNombre,
+        platoPrincipal: platoPrincipal,
+        sopaNombre: sopaNombre,
+        isAlmuerzoCompleto: isAlmuerzoCompleto,
+        menuCategory: menuCategory,
         date: date,
         type: type,
         status: 'confirmada',
@@ -158,6 +175,12 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
   Future<int> createJointReservations({
     required DateTime date,
     required String dishName,
+    String? entradaNombre,
+    String? platoPrincipal,
+    String? sopaNombre,
+    bool isAlmuerzoCompleto = true,
+    ReservationMenuCategory menuCategory =
+        ReservationMenuCategory.almuerzoCompleto,
     required bool reserveForEmployee,
     required List<String> selectedFamiliarIds,
     required Map<String, String> familiarNames,
@@ -170,13 +193,24 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
     final repo = ref.read(reservationRepositoryProvider);
     final List<Reservation> createdList = [];
 
+    final finalDishName = dishName.isNotEmpty
+        ? dishName
+        : (platoPrincipal != null && sopaNombre != null
+              ? 'Almuerzo Completo (${entradaNombre ?? "Ensalada Fresca del Día"} + $sopaNombre + $platoPrincipal)'
+              : 'Almuerzo Completo del Día');
+
     if (reserveForEmployee) {
       final res = Reservation(
         id: const Uuid().v4(),
         userId: userId,
         userName: userName,
         beneficiaryName: userName,
-        dishName: dishName,
+        dishName: finalDishName,
+        entradaNombre: entradaNombre,
+        platoPrincipal: platoPrincipal,
+        sopaNombre: sopaNombre,
+        isAlmuerzoCompleto: isAlmuerzoCompleto,
+        menuCategory: menuCategory,
         date: date,
         type: pricePerPerson == 15.0 ? 'pension' : 'diaria',
         status: 'confirmada',
@@ -197,7 +231,12 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
         userName: userName,
         familiarId: famId,
         beneficiaryName: famName,
-        dishName: dishName,
+        dishName: finalDishName,
+        entradaNombre: entradaNombre,
+        platoPrincipal: platoPrincipal,
+        sopaNombre: sopaNombre,
+        isAlmuerzoCompleto: isAlmuerzoCompleto,
+        menuCategory: menuCategory,
         date: date,
         type: pricePerPerson == 15.0 ? 'pension' : 'diaria',
         status: 'confirmada',

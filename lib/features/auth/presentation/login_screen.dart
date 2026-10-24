@@ -14,12 +14,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _isRequestingReset = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _requestPasswordReset() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ingresa tu correo institucional para solicitar el reinicio.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() => _isRequestingReset = true);
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .createPasswordResetRequest(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Solicitud enviada. Un administrador atenderá tu reinicio de contraseña.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo enviar la solicitud: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRequestingReset = false);
+    }
   }
 
   Future<void> _handleLogin() async {
@@ -41,11 +83,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (!ok) {
+        final error = ref.read(authProvider.notifier).lastError ?? '';
+        final message =
+            error.contains('email_not_confirmed') ||
+                error.contains('Email not confirmed')
+            ? 'Tu correo aún no está confirmado. Revisa tu bandeja de entrada o solicita al administrador que confirme la cuenta.'
+            : error.contains('email_provider_disabled')
+            ? 'No se puede consultar la base de datos porque el proveedor Email está deshabilitado en Supabase. Habilítalo en Authentication > Providers.'
+            : error.contains('no tiene un perfil')
+            ? 'La cuenta existe, pero no tiene un perfil asociado en Supabase. Registra el perfil del usuario y vuelve a intentar.'
+            : 'Error al iniciar sesión. Revisa tus credenciales.';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error al iniciar sesión. Revisa tus credenciales.'),
-            backgroundColor: Colors.redAccent,
-          ),
+          SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
         );
       }
     }
@@ -167,6 +216,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _isLoading || _isRequestingReset
+                              ? null
+                              : _requestPasswordReset,
+                          child: _isRequestingReset
+                              ? const Text('Enviando solicitud...')
+                              : const Text('¿Olvidaste tu contraseña?'),
+                        ),
+                      ),
 
                       // Botón Ingresar
                       SizedBox(

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:restaurante_app/core/config/supabase_config.dart';
 import 'package:restaurante_app/features/admin/domain/admin_employee_entity.dart';
@@ -7,6 +8,19 @@ import 'package:restaurante_app/features/familiares/domain/familiar_entity.dart'
 import 'package:restaurante_app/features/familiares/domain/family_policy.dart';
 
 class SupabaseAdminRepository {
+  bool lastCreatedUserRequiresEmailConfirmation = false;
+
+  String _databaseParentesco(String parentesco) {
+    switch (parentesco.trim()) {
+      case 'Hijo/a':
+        return 'Hijo';
+      case 'Hermano/a':
+        return 'Hermano';
+      default:
+        return parentesco.trim();
+    }
+  }
+
   // Almacén en memoria de empleados y sus familiares asociados para demo y modo local
   final List<AdminEmployee> _employees = [
     AdminEmployee(
@@ -120,6 +134,32 @@ class SupabaseAdminRepository {
     ),
   ];
 
+  Future<List<Map<String, dynamic>>> getPasswordResetRequests() async {
+    final client = SupabaseConfig.client;
+    if (client == null) return const [];
+    final response = await client
+        .from('password_reset_requests')
+        .select()
+        .order('created_at', ascending: false);
+    return (response as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<void> updatePasswordResetRequest({
+    required String id,
+    String newPassword = '123456',
+  }) async {
+    final client = SupabaseConfig.client;
+    if (client == null) {
+      throw Exception('Supabase no está disponible.');
+    }
+    await client.rpc(
+      'attend_password_reset_request',
+      params: {'p_request_id': id, 'p_new_password': newPassword},
+    );
+  }
+
   /// Obtiene la lista completa de empleados con sus familiares
   Future<List<AdminEmployee>> getEmployees() async {
     final client = SupabaseConfig.client;
@@ -131,12 +171,11 @@ class SupabaseAdminRepository {
       final res = await client
           .from('usuarios')
           .select('*, familiares(*)')
-          .eq('activo', true)
           .order('creado_en', ascending: false);
 
       final List<dynamic> data = res as List<dynamic>;
       if (data.isEmpty) {
-        return List.unmodifiable(_employees);
+        return const [];
       }
 
       return data.map((item) {
@@ -148,10 +187,11 @@ class SupabaseAdminRepository {
         return AdminEmployee.fromJson(map, familiares: familiares);
       }).toList();
     } catch (e) {
-      debugPrint(
-        '⚠️ Error obteniendo empleados de Supabase ($e). Usando memoria.',
+      debugPrint('⚠️ Error obteniendo empleados de Supabase: $e');
+      throw Exception(
+        'No se pudo cargar el padrón de empleados desde Supabase. '
+        'Verifica la migración y los permisos RLS. Detalle: $e',
       );
-      return List.unmodifiable(_employees);
     }
   }
 
@@ -161,12 +201,33 @@ class SupabaseAdminRepository {
     required String nombres,
     required String apellidos,
     required String email,
+    String password = '123456',
     required String telefono,
     required String departamento,
     required bool hasMonthlyPlan,
     List<Map<String, String>> initialFamiliares = const [],
   }) async {
-    final newId = const Uuid().v4();
+    // Validación de duplicados en la lista local antes de persistir
+    final trimmedCi = ci.trim();
+    final trimmedEmail = email.trim().toLowerCase();
+    lastCreatedUserRequiresEmailConfirmation = false;
+
+    if (_employees.any((e) => e.ci.trim() == trimmedCi)) {
+      throw Exception(
+        'El usuario ya está registrado con la cédula de identidad (CI) $trimmedCi.',
+      );
+    }
+    if (_employees.any((e) => e.email.trim().toLowerCase() == trimmedEmail)) {
+      throw Exception(
+        'El usuario ya está registrado con el correo institucional $trimmedEmail.',
+      );
+    }
+
+    if (password.length < 6) {
+      throw Exception('La contraseña debe tener al menos 6 caracteres.');
+    }
+
+    var newId = const Uuid().v4();
     final List<Familiar> addedFamiliares = [];
 
     // Limitar familiares iniciales al máximo legal de 3
@@ -190,14 +251,14 @@ class SupabaseAdminRepository {
       }
     }
 
-    final newEmployee = AdminEmployee(
+    var newEmployee = AdminEmployee(
       id: newId,
-      ci: ci,
-      nombres: nombres,
-      apellidos: apellidos,
-      email: email,
-      telefono: telefono,
-      departamento: departamento,
+      ci: trimmedCi,
+      nombres: nombres.trim(),
+      apellidos: apellidos.trim(),
+      email: trimmedEmail,
+      telefono: telefono.trim(),
+      departamento: departamento.trim(),
       rol: 'EMPLEADO',
       hasMonthlyPlan: hasMonthlyPlan,
       activo: true,
@@ -205,40 +266,107 @@ class SupabaseAdminRepository {
       familiares: addedFamiliares,
     );
 
-    _employees.insert(0, newEmployee);
-
     final client = SupabaseConfig.client;
-    if (client != null && SupabaseConfig.isInitialized) {
-      try {
-        await client.from('usuarios').insert({
-          'id': newId,
-          'ci': ci,
-          'nombres': nombres,
-          'apellidos': apellidos,
-          'email': email,
-          'telefono': telefono,
-          'rol': 'EMPLEADO',
-          'activo': true,
-        });
-
-        for (final fam in addedFamiliares) {
-          await client.from('familiares').insert({
-            'empleado_id': newId,
-            'ci': fam.ci,
-            'nombres': fam.nombres,
-            'apellidos': fam.apellidos,
-            'parentesco': fam.parentesco,
-            'activo': true,
-          });
-        }
-      } catch (e) {
-        debugPrint(
-          '⚠️ Error registrando empleado en Supabase ($e).',
-        );
-        rethrow;
-      }
+    if (client == null || !SupabaseConfig.isInitialized) {
+      _employees.insert(0, newEmployee);
+      return newEmployee;
+    }
+    if (client.auth.currentUser == null) {
+      throw Exception(
+        'Debes iniciar sesión con una cuenta administrativa de Supabase '
+        'para guardar empleados.',
+      );
     }
 
+    try {
+      final existingByCi = await client
+          .from('usuarios')
+          .select('id')
+          .eq('ci', trimmedCi)
+          .maybeSingle();
+      if (existingByCi != null) {
+        throw Exception(
+          'El usuario ya está registrado con la cédula de identidad (CI) $trimmedCi.',
+        );
+      }
+
+      final existingByEmail = await client
+          .from('usuarios')
+          .select('id')
+          .eq('email', trimmedEmail)
+          .maybeSingle();
+      if (existingByEmail != null) {
+        throw Exception(
+          'El usuario ya está registrado con el correo institucional $trimmedEmail.',
+        );
+      }
+
+      final response = await client.functions.invoke(
+        'create-employee',
+        body: {
+          'ci': trimmedCi,
+          'nombres': nombres,
+          'apellidos': apellidos,
+          'email': trimmedEmail,
+          'password': password,
+          'telefono': telefono,
+          'departamento': departamento,
+          'hasMonthlyPlan': hasMonthlyPlan,
+          'familiares': addedFamiliares
+              .map(
+                (family) => {
+                  'ci': family.ci,
+                  'nombres': family.nombres,
+                  'apellidos': family.apellidos,
+                  'parentesco': _databaseParentesco(family.parentesco),
+                },
+              )
+              .toList(),
+        },
+      );
+      final responseData = Map<String, dynamic>.from(response.data as Map);
+      if (responseData['error'] != null) {
+        throw Exception(responseData['error'].toString());
+      }
+      newId = responseData['id']?.toString() ?? '';
+      if (newId.isEmpty) {
+        throw Exception('La función no devolvió el ID del empleado.');
+      }
+      lastCreatedUserRequiresEmailConfirmation = false;
+      newEmployee = newEmployee.copyWith(
+        id: newId,
+        familiares: newEmployee.familiares
+            .map((familiar) => familiar.copyWith(empleadoId: newId))
+            .toList(),
+      );
+    } catch (e) {
+      debugPrint('⚠️ Error registrando empleado en Supabase: $e');
+      if (e is Exception &&
+          e.toString().startsWith('Exception: El usuario ya está registrado')) {
+        rethrow;
+      }
+      if (e is PostgrestException && e.code == '23505') {
+        final field = e.message.contains('usuarios_email_key')
+            ? 'correo institucional'
+            : 'cédula de identidad (CI)';
+        throw Exception('El usuario ya está registrado con ese $field.');
+      }
+      if (e.toString().contains('invalid input value for enum parentesco')) {
+        throw Exception(
+          'La base de datos todavía usa un enum incompatible para parentesco. '
+          'Ejecuta en Supabase la migración '
+          'supabase/migrations/20261023_fix_parentesco_type.sql '
+          'y vuelve a intentar.',
+        );
+      }
+      throw Exception(
+        'No se pudo guardar el empleado en Supabase. '
+        'Ejecuta la migración 20261023_employee_profile_fields.sql '
+        'y verifica los permisos RLS. Detalle: $e',
+      );
+    }
+
+    _employees.insert(0, newEmployee);
     return newEmployee;
   }
 
@@ -260,11 +388,25 @@ class SupabaseAdminRepository {
               'apellidos': updated.apellidos,
               'email': updated.email,
               'telefono': updated.telefono,
+              'departamento': updated.departamento,
+              'has_monthly_plan': updated.hasMonthlyPlan,
             })
             .eq('id', updated.id);
       } catch (e) {
-        debugPrint('⚠️ Error actualizando empleado en Supabase: $e');
-        rethrow;
+        debugPrint(
+          '⚠️ Error actualizando empleado en usuarios: $e. Intentando profiles...',
+        );
+        try {
+          await client
+              .from('profiles')
+              .update({
+                'email': updated.email,
+                'full_name': '${updated.nombres} ${updated.apellidos}',
+                'department': updated.departamento,
+                'is_pensioner': updated.hasMonthlyPlan,
+              })
+              .eq('id', updated.id);
+        } catch (_) {}
       }
     }
   }
@@ -291,7 +433,9 @@ class SupabaseAdminRepository {
       try {
         await client.rpc('limpiar_datos_prueba');
       } catch (e) {
-        debugPrint('ℹ️ RPC limpiar_datos_prueba no disponible, borrado directo en tablas: $e');
+        debugPrint(
+          'ℹ️ RPC limpiar_datos_prueba no disponible, borrado directo en tablas: $e',
+        );
         final testIds = [
           'demo-user-123',
           'demo-admin-789',
@@ -315,44 +459,74 @@ class SupabaseAdminRepository {
         ];
 
         for (final uid in testIds) {
-          try { await client.from('reservas').delete().eq('empleado_id', uid); } catch (_) {}
-          try { await client.from('reservations').delete().eq('user_id', uid); } catch (_) {}
-          try { await client.from('familiares').delete().eq('empleado_id', uid); } catch (_) {}
-          try { await client.from('suscripciones').delete().eq('empleado_id', uid); } catch (_) {}
-          try { await client.from('monthly_subscriptions').delete().eq('user_id', uid); } catch (_) {}
-          try { await client.from('menu_semanal').delete().eq('creado_por', uid); } catch (_) {}
-          try { await client.from('usuarios').delete().eq('id', uid); } catch (_) {}
-          try { await client.from('profiles').delete().eq('id', uid); } catch (_) {}
+          try {
+            await client.from('reservas').delete().eq('empleado_id', uid);
+          } catch (_) {}
+          try {
+            await client.from('reservations').delete().eq('user_id', uid);
+          } catch (_) {}
+          try {
+            await client.from('familiares').delete().eq('empleado_id', uid);
+          } catch (_) {}
+          try {
+            await client.from('suscripciones').delete().eq('empleado_id', uid);
+          } catch (_) {}
+          try {
+            await client
+                .from('monthly_subscriptions')
+                .delete()
+                .eq('user_id', uid);
+          } catch (_) {}
+          try {
+            await client.from('menu_semanal').delete().eq('creado_por', uid);
+          } catch (_) {}
+          try {
+            await client.from('usuarios').delete().eq('id', uid);
+          } catch (_) {}
+          try {
+            await client.from('profiles').delete().eq('id', uid);
+          } catch (_) {}
         }
 
         for (final email in testEmails) {
-          try { await client.from('usuarios').delete().eq('email', email); } catch (_) {}
-          try { await client.from('profiles').delete().eq('email', email); } catch (_) {}
+          try {
+            await client.from('usuarios').delete().eq('email', email);
+          } catch (_) {}
+          try {
+            await client.from('profiles').delete().eq('email', email);
+          } catch (_) {}
         }
       }
     }
 
     return {
       'success': true,
-      'message': 'Registros de prueba de empleado, administrador y cocina borrados con éxito.',
+      'message':
+          'Registros de prueba de empleado, administrador y cocina borrados con éxito.',
     };
   }
 
   /// Elimina un empleado
   Future<void> deleteEmployee(String employeeId) async {
-    _employees.removeWhere((e) => e.id == employeeId);
-
     final client = SupabaseConfig.client;
-    if (client != null) {
-      try {
-        // En cascada o borrado lógico
-        await client
-            .from('usuarios')
-            .update({'activo': false})
-            .eq('id', employeeId);
-      } catch (e) {
-        debugPrint('⚠️ Error al eliminar empleado en Supabase: $e');
-      }
+    if (client == null || !SupabaseConfig.isInitialized) {
+      _employees.removeWhere((e) => e.id == employeeId);
+      return;
+    }
+
+    try {
+      await client.rpc(
+        'delete_employee_account',
+        params: {'p_employee_id': employeeId},
+      );
+      _employees.removeWhere((e) => e.id == employeeId);
+    } catch (e) {
+      debugPrint('⚠️ Error al eliminar empleado en Supabase: $e');
+      throw Exception(
+        'No se pudo eliminar el empleado en Supabase. '
+        'Verifica que ejecutaste la migración de eliminación de cuentas. '
+        'Detalle: $e',
+      );
     }
   }
 
@@ -367,9 +541,6 @@ class SupabaseAdminRepository {
       return false; // Cupo máximo alcanzado
     }
 
-    final updatedFamiliares = [...currentEmp.familiares, familiar];
-    _employees[empIndex] = currentEmp.copyWith(familiares: updatedFamiliares);
-
     final client = SupabaseConfig.client;
     if (client != null) {
       try {
@@ -378,14 +549,26 @@ class SupabaseAdminRepository {
           'ci': familiar.ci,
           'nombres': familiar.nombres,
           'apellidos': familiar.apellidos,
-          'parentesco': familiar.parentesco,
+          'parentesco': _databaseParentesco(familiar.parentesco),
           'activo': true,
         });
       } catch (e) {
         debugPrint('⚠️ Error insertando familiar en Supabase: $e');
+        if (e.toString().contains('invalid input value for enum parentesco')) {
+          throw Exception(
+            'La base de datos todavía usa un enum incompatible para parentesco. '
+            'Ejecuta en Supabase la migración '
+            'supabase/migrations/20261023_fix_parentesco_type.sql '
+            'y vuelve a intentar.',
+          );
+        }
+        throw Exception('No se pudo guardar el familiar en Supabase: $e');
       }
     }
 
+    _employees[empIndex] = currentEmp.copyWith(
+      familiares: [...currentEmp.familiares, familiar],
+    );
     return true;
   }
 
@@ -408,6 +591,38 @@ class SupabaseAdminRepository {
         debugPrint('⚠️ Error eliminando familiar en Supabase: $e');
       }
     }
+  }
+
+  Future<void> updateFamiliar(String employeeId, Familiar familiar) async {
+    final empIndex = _employees.indexWhere((e) => e.id == employeeId);
+    if (empIndex == -1) {
+      throw Exception('No se encontró el empleado.');
+    }
+
+    final client = SupabaseConfig.client;
+    if (client != null) {
+      try {
+        await client
+            .from('familiares')
+            .update({
+              'ci': familiar.ci,
+              'nombres': familiar.nombres,
+              'apellidos': familiar.apellidos,
+              'parentesco': _databaseParentesco(familiar.parentesco),
+            })
+            .eq('id', familiar.id);
+      } catch (e) {
+        debugPrint('⚠️ Error actualizando familiar en Supabase: $e');
+        throw Exception('No se pudo actualizar el familiar en Supabase: $e');
+      }
+    }
+
+    final currentEmp = _employees[empIndex];
+    _employees[empIndex] = currentEmp.copyWith(
+      familiares: currentEmp.familiares
+          .map((current) => current.id == familiar.id ? familiar : current)
+          .toList(),
+    );
   }
 
   /// Alterna o activa el plan mensual (tarifa Bs. 15 vs Bs. 18)

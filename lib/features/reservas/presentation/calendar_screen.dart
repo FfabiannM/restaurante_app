@@ -24,7 +24,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   final TextEditingController _notesController = TextEditingController();
 
   DailyMenu? _dailyMenu;
-  String _selectedMenuType = 'Almuerzo Completo'; // 'Almuerzo Completo', 'Vegetariano', 'Especial'
+  String _selectedMenuType =
+      'Almuerzo Completo'; // 'Almuerzo Completo', 'Vegetariano', 'Especial'
   Familiar? _selectedFamiliar; // null = para el empleado
   bool _isLoadingMenu = true;
 
@@ -138,7 +139,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   setState(() {
                     _focusedDay = newFocusedDay;
                   });
-                  ref.read(selectedDateProvider.notifier).state = newSelectedDay;
+                  ref.read(selectedDateProvider.notifier).state =
+                      newSelectedDay;
                   _loadMenuStructure(newSelectedDay);
                 },
                 calendarFormat: CalendarFormat.month,
@@ -160,7 +162,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ),
                 calendarStyle: CalendarStyle(
                   todayDecoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.4),
                     shape: BoxShape.circle,
                   ),
                   selectedDecoration: BoxDecoration(
@@ -245,8 +249,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   color: isHoliday
                       ? Colors.amber.shade400
                       : policy.canReserve
-                          ? Colors.green.shade300
-                          : Colors.red.shade200,
+                      ? Colors.green.shade300
+                      : Colors.red.shade200,
                   width: 1.5,
                 ),
               ),
@@ -259,13 +263,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         isHoliday
                             ? Icons.celebration
                             : policy.canReserve
-                                ? Icons.check_circle
-                                : Icons.info_outline,
+                            ? Icons.check_circle
+                            : Icons.info_outline,
                         color: isHoliday
                             ? Colors.amber.shade800
                             : policy.canReserve
-                                ? Colors.green
-                                : Colors.red,
+                            ? Colors.green
+                            : Colors.red,
                         size: 22,
                       ),
                       const SizedBox(width: 8),
@@ -315,15 +319,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     isHoliday
                         ? 'Feriado: ${holidayObj?.name ?? 'Feriado Oficial'}. Restaurante no atiende.'
                         : policy.canReserve
-                            ? 'Día habilitado para reserva de almuerzo institucional.'
-                            : policy.reserveReason,
+                        ? 'Día habilitado para reserva de almuerzo institucional.'
+                        : policy.reserveReason,
                     style: TextStyle(
                       fontSize: 13,
                       color: isHoliday
                           ? Colors.amber.shade900
                           : policy.canReserve
-                              ? Colors.green.shade800
-                              : Colors.red.shade800,
+                          ? Colors.green.shade800
+                          : Colors.red.shade800,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -359,7 +363,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       initialValue: _selectedFamiliar,
                       decoration: InputDecoration(
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -371,7 +377,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           child: Text(
                             'Para mí (Empleado: ${currentUser?.fullName ?? 'Usuario'})',
                             style: const TextStyle(
-                                fontSize: 13.5, fontWeight: FontWeight.w600),
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                         ...familyMembers.map((fam) {
@@ -417,7 +425,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         initialValue: _selectedMenuType,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -427,7 +437,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           DropdownMenuItem(
                             value: 'Almuerzo Completo',
                             child: Text(
-                              '🍽️ Almuerzo Completo (${_dailyMenu != null ? _dailyMenu!.almuerzoCompleto.summary : "Entrada + Sopa + Segundo"})',
+                              '🍽️ Almuerzo Completo (${_dailyMenu != null ? _dailyMenu!.almuerzoCompleto.summary : "Ensalada + Sopa del día + Segundo"})',
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 13),
                             ),
@@ -461,7 +471,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     // Nota de postre
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: isThursday
                             ? Colors.purple.withValues(alpha: 0.1)
@@ -477,7 +489,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         children: [
                           Icon(
                             isThursday ? Icons.cake : Icons.info_outline,
-                            color: isThursday ? Colors.purple : Colors.grey.shade700,
+                            color: isThursday
+                                ? Colors.purple
+                                : Colors.grey.shade700,
                             size: 18,
                           ),
                           const SizedBox(width: 8),
@@ -529,7 +543,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 child: OutlinedButton.icon(
                   onPressed: policy.canCancel
                       ? () =>
-                          _handleCancellation(context, existingReservation.id)
+                            _handleCancellation(context, existingReservation.id)
                       : () => _showPolicyError(context, policy.cancelReason),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(
@@ -564,11 +578,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   onPressed: policy.canReserve
                       ? () => _handleReservation(context, selectedDate)
                       : () => _showPolicyError(
-                            context,
-                            isHoliday
-                                ? 'No se puede reservar en días feriados'
-                                : policy.reserveReason,
-                          ),
+                          context,
+                          isHoliday
+                              ? 'No se puede reservar en días feriados'
+                              : policy.reserveReason,
+                        ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: policy.canReserve
                         ? Theme.of(context).colorScheme.primary
@@ -636,7 +650,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       dishDescription =
           'Especial: ${_dailyMenu?.platoEspecial.name ?? "Opción Especial"}';
     } else {
-      dishDescription = 'Almuerzo Completo (Entrada + Sopa + Segundo)';
+      dishDescription = 'Almuerzo Completo (Ensalada + Sopa del día + Segundo)';
     }
 
     if (DailyMenuPolicy.isDessertDay(selectedDate) &&

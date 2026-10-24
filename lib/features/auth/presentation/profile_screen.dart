@@ -765,10 +765,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (!ok) {
+        final error = ref.read(authProvider.notifier).lastError ?? '';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error.contains('email_provider_disabled')
+                  ? 'Activa el proveedor Email en Supabase para registrar usuarios.'
+                  : 'No se pudo completar el registro. Revisa los datos e inténtalo nuevamente.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else if (_isSignUp &&
+          !ref.read(authRepositoryProvider).hasActiveSession) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Error al autenticar. Verifica tus credenciales.'),
-            backgroundColor: Colors.red,
+            content: Text(
+              'Registro completado. Revisa tu correo para confirmar la cuenta y luego inicia sesión.',
+            ),
+            backgroundColor: Colors.green,
           ),
         );
       }
@@ -923,8 +938,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ? null
                           : () async {
                               final newPass = newPasswordController.text.trim();
-                              final confirmPass =
-                                  confirmPasswordController.text.trim();
+                              final confirmPass = confirmPasswordController.text
+                                  .trim();
 
                               if (newPass.isEmpty || confirmPass.isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
