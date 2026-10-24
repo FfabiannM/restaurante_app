@@ -165,5 +165,53 @@ void main() {
       expect(snackBar.backgroundColor, equals(Colors.green));
       expect(find.text('Empleado registrado con éxito en Supabase.'), findsOneWidget);
     });
+
+    testWidgets('Ingreso de correo inválido muestra advertencia en la ventana en foco', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authProvider.overrideWith(
+              () => TestAuthNotifier(SupabaseAuthRepository.demoAdmin),
+            ),
+          ],
+          child: const MaterialApp(
+            home: AdminScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FloatingActionButton, 'Registrar Empleado'));
+      await tester.pumpAndSettle();
+
+      // Llenar campos con correo inválido
+      await tester.enterText(find.widgetWithText(TextField, 'Nombres'), 'Carlos');
+      await tester.enterText(find.widgetWithText(TextField, 'Apellidos'), 'Mamani');
+      await tester.enterText(find.widgetWithText(TextField, 'Cédula de Identidad (CI)'), '1234567');
+      await tester.enterText(find.widgetWithText(TextField, 'Teléfono'), '77712345');
+      await tester.enterText(find.widgetWithText(TextField, 'Correo Institucional'), 'correo-invalido');
+      await tester.enterText(find.widgetWithText(TextField, 'Departamento / Área'), 'Sistemas');
+
+      final submitBtn = find.text('Registrar y Asociar Familiares');
+      await tester.ensureVisible(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(submitBtn);
+      await tester.pumpAndSettle();
+
+      // Advertencia visible directamente en la ventana en foco
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(
+        find.text('Por favor ingresa un correo electrónico institucional válido.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Atención: Por favor ingresa un correo electrónico institucional válido.'),
+        findsOneWidget,
+      );
+    });
   });
 }

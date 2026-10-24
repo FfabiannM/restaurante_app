@@ -2,7 +2,7 @@ import 'package:restaurante_app/features/menu/domain/daily_menu_entity.dart';
 import 'package:restaurante_app/features/menu/domain/menu_entity.dart';
 
 /// Reglas de negocio para la conformación del menú diario:
-/// 1. Almuerzo completo: Obligatoriamente incluye Entrada + Sopa + Segundo.
+/// 1. Almuerzo completo: incluye la sopa del día como entrada y un segundo.
 /// 2. Un plato vegetariano por día.
 /// 3. Un plato especial por día.
 /// 4. El postre SOLO se sirve los días Jueves (DateTime.thursday).
@@ -22,6 +22,7 @@ class DailyMenuPolicy {
     required Dish platoVegetariano,
     required Dish platoEspecial,
     Dish? postre,
+    List<AlmuerzoCompleto>? almuerzosCompletos,
   }) {
     final isThursday = isDessertDay(date);
     return DailyMenu(
@@ -31,6 +32,7 @@ class DailyMenuPolicy {
         sopa: sopa,
         segundo: segundo,
       ),
+      almuerzosCompletos: almuerzosCompletos ?? const [],
       platoVegetariano: platoVegetariano,
       platoEspecial: platoEspecial,
       postre: isThursday ? postre : null,
@@ -39,7 +41,6 @@ class DailyMenuPolicy {
 
   /// Valida que una estructura de menú cumpla todas las reglas requeridas.
   static bool validateMenu(DailyMenu menu) {
-    if (menu.almuerzoCompleto.entrada.name.trim().isEmpty) return false;
     if (menu.almuerzoCompleto.sopa.name.trim().isEmpty) return false;
     if (menu.almuerzoCompleto.segundo.name.trim().isEmpty) return false;
     if (menu.platoVegetariano.name.trim().isEmpty) return false;

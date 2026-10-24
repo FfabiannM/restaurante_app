@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restaurante_app/core/utils/date_utils.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
+import 'package:restaurante_app/features/reservas/domain/usecases/reservation_policy.dart';
 import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
 import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
 
@@ -46,6 +47,22 @@ class _EncargadoScreenState extends ConsumerState<EncargadoScreen> {
   }
 
   Future<void> _markAsDelivered(Reservation order) async {
+    final deliveryCheck = ReservationPolicy().checkCanDeliver(
+      order.date,
+      DateTime.now(),
+    );
+    if (!deliveryCheck.isAllowed) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(deliveryCheck.message),
+            backgroundColor: Colors.orange.shade800,
+          ),
+        );
+      }
+      return;
+    }
+
     try {
       final repo = ref.read(reservationRepositoryProvider);
       await repo.updateReservationStatus(order.id, 'entregada');
@@ -87,8 +104,9 @@ class _EncargadoScreenState extends ConsumerState<EncargadoScreen> {
     }).toList();
 
     final totalOrders = _orders.where((o) => o.status != 'cancelada').length;
-    final deliveredOrders =
-        _orders.where((o) => o.status == 'entregada').length;
+    final deliveredOrders = _orders
+        .where((o) => o.status == 'entregada')
+        .length;
     final pendingOrders = totalOrders - deliveredOrders;
 
     return Scaffold(
@@ -153,7 +171,10 @@ class _EncargadoScreenState extends ConsumerState<EncargadoScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.calendar_month, color: Colors.blue),
+                        icon: const Icon(
+                          Icons.calendar_month,
+                          color: Colors.blue,
+                        ),
                         onPressed: () async {
                           final picked = await showDatePicker(
                             context: context,
@@ -173,10 +194,21 @@ class _EncargadoScreenState extends ConsumerState<EncargadoScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildMetric('Total Pedidos', '$totalOrders', Colors.blue),
                       _buildMetric(
-                          'Pendientes', '$pendingOrders', Colors.orange),
-                      _buildMetric('Entregados', '$deliveredOrders', Colors.green),
+                        'Total Pedidos',
+                        '$totalOrders',
+                        Colors.blue,
+                      ),
+                      _buildMetric(
+                        'Pendientes',
+                        '$pendingOrders',
+                        Colors.orange,
+                      ),
+                      _buildMetric(
+                        'Entregados',
+                        '$deliveredOrders',
+                        Colors.green,
+                      ),
                     ],
                   ),
                 ],
@@ -235,6 +267,10 @@ class _EncargadoScreenState extends ConsumerState<EncargadoScreen> {
                   final order = filtered[index];
                   final isDelivered = order.status == 'entregada';
                   final isCancelled = order.status == 'cancelada';
+                  final deliveryCheck = ReservationPolicy().checkCanDeliver(
+                    order.date,
+                    DateTime.now(),
+                  );
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 10),
@@ -246,8 +282,8 @@ class _EncargadoScreenState extends ConsumerState<EncargadoScreen> {
                         color: isDelivered
                             ? Colors.green.shade300
                             : isCancelled
-                                ? Colors.red.shade200
-                                : Colors.grey.shade200,
+                            ? Colors.red.shade200
+                            : Colors.grey.shade200,
                       ),
                     ),
                     child: Row(
@@ -256,19 +292,19 @@ class _EncargadoScreenState extends ConsumerState<EncargadoScreen> {
                           backgroundColor: isDelivered
                               ? Colors.green.shade100
                               : isCancelled
-                                  ? Colors.red.shade100
-                                  : Colors.blue.shade100,
+                              ? Colors.red.shade100
+                              : Colors.blue.shade100,
                           child: Icon(
                             isDelivered
                                 ? Icons.check
                                 : isCancelled
-                                    ? Icons.close
-                                    : Icons.person,
+                                ? Icons.close
+                                : Icons.person,
                             color: isDelivered
                                 ? Colors.green
                                 : isCancelled
-                                    ? Colors.red
-                                    : Colors.blue,
+                                ? Colors.red
+                                : Colors.blue,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -304,7 +340,9 @@ class _EncargadoScreenState extends ConsumerState<EncargadoScreen> {
                         ),
                         if (!isDelivered && !isCancelled)
                           ElevatedButton(
-                            onPressed: () => _markAsDelivered(order),
+                            onPressed: deliveryCheck.isAllowed
+                                ? () => _markAsDelivered(order)
+                                : null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green,
                               padding: const EdgeInsets.symmetric(

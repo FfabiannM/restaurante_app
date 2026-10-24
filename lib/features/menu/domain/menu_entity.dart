@@ -15,7 +15,7 @@ class Dish {
     required this.description,
     required this.imageUrl,
     this.price = 15.0,
-    this.category = 'Plato Fuerte',
+    this.category = 'Segundo',
     this.calories = 650,
     this.isFavorite = false,
     this.isAvailable = true,
@@ -50,9 +50,12 @@ class Dish {
       id: json['id']?.toString() ?? '',
       name: json['name'] ?? '',
       description: json['description'] ?? '',
-      imageUrl: json['image_url'] ?? json['imageUrl'] ?? 'assets/silpancho.png',
+      imageUrl:
+          json['image_url'] ??
+          json['imageUrl'] ??
+          'assets/images/01_silpancho.jpg',
       price: (json['price'] as num?)?.toDouble() ?? 15.0,
-      category: json['category'] ?? 'Plato Fuerte',
+      category: json['category'] ?? 'Segundo',
       calories: (json['calories'] as num?)?.toInt() ?? 650,
       isFavorite: json['is_favorite'] == true || json['isFavorite'] == true,
       isAvailable: json['is_available'] ?? true,

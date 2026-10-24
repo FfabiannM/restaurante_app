@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:restaurante_app/core/config/supabase_config.dart';
 import 'package:restaurante_app/core/utils/date_utils.dart';
 import 'package:restaurante_app/features/menu/domain/bolivian_dish_entity.dart';
+import 'package:restaurante_app/features/menu/data/dish_image_resolver.dart';
 
 class SupabaseWeeklyMenuRepository {
   // Catálogo base de platos típicos de la gastronomía boliviana
@@ -14,7 +15,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Segundo',
       region: 'Cochabamba',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/01_silpancho.jpg',
     ),
     const PlatoCatalogo(
       id: 2,
@@ -24,7 +25,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Segundo',
       region: 'Cochabamba',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/02_pique_macho.jpg',
     ),
     const PlatoCatalogo(
       id: 3,
@@ -34,7 +35,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Segundo',
       region: 'Santa Cruz',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/03_charque_kan.jpg',
     ),
     const PlatoCatalogo(
       id: 4,
@@ -44,7 +45,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Sopa',
       region: 'Nacional',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/04_sopa_de_mani.jpg',
     ),
     const PlatoCatalogo(
       id: 5,
@@ -54,7 +55,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Segundo',
       region: 'La Paz',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/05_chicharron.jpg',
     ),
     const PlatoCatalogo(
       id: 6,
@@ -64,7 +65,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Segundo',
       region: 'Tarija',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/06_fricase.jpg',
     ),
     const PlatoCatalogo(
       id: 7,
@@ -74,7 +75,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Sopa',
       region: 'La Paz',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/08_crema_de_quinua.jpg',
     ),
     const PlatoCatalogo(
       id: 8,
@@ -84,7 +85,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Segundo',
       region: 'Cochabamba / Chuquisaca',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/09_locro_de_zapallo.jpg',
     ),
     const PlatoCatalogo(
       id: 9,
@@ -94,7 +95,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Segundo',
       region: 'Chuquisaca',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/06_fricase.jpg',
     ),
     const PlatoCatalogo(
       id: 10,
@@ -104,7 +105,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Segundo',
       region: 'La Paz',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/11_tortilla_de_verduras.jpg',
     ),
     const PlatoCatalogo(
       id: 11,
@@ -114,7 +115,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Segundo',
       region: 'Nacional',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/10_aji_de_fideo_sin_carne.jpg',
     ),
     const PlatoCatalogo(
       id: 12,
@@ -124,7 +125,55 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Segundo',
       region: 'Potosí / Cochabamba',
       precio: 18.0,
-      imagenUrl: 'assets/silpancho.png',
+      imagenUrl: 'assets/images/07_milanesa_de_soya.jpg',
+    ),
+    const PlatoCatalogo(
+      id: 13,
+      nombre: 'Crema de Quinua Real',
+      descripcion:
+          'Sopa del día de quinua real con verduras frescas, queso criollo y cilantro.',
+      categoria: 'Sopa',
+      region: 'Potosí / Oruro',
+      precio: 18.0,
+      imagenUrl: 'assets/images/08_crema_de_quinua.jpg',
+    ),
+    const PlatoCatalogo(
+      id: 14,
+      nombre: 'Locro de Gallina Tradicional',
+      descripcion: 'Sopa del día con gallina criolla, arroz graneado y yuca.',
+      categoria: 'Sopa',
+      region: 'Santa Cruz',
+      precio: 18.0,
+      imagenUrl: 'assets/images/09_locro_de_zapallo.jpg',
+    ),
+    const PlatoCatalogo(
+      id: 15,
+      nombre: 'Caldo de Costilla Criollo',
+      descripcion:
+          'Sopa del día de costilla de res, papas y verduras de la huerta.',
+      categoria: 'Sopa',
+      region: 'Nacional',
+      precio: 18.0,
+      imagenUrl: 'assets/images/04_sopa_de_mani.jpg',
+    ),
+    const PlatoCatalogo(
+      id: 16,
+      nombre: 'Ensalada Fresca del Día',
+      descripcion:
+          'Ensalada de hojas verdes, tomate, zanahoria y aderezo de la casa.',
+      categoria: 'Entrada',
+      region: 'Nacional',
+      precio: 18.0,
+      imagenUrl: '',
+    ),
+    const PlatoCatalogo(
+      id: 17,
+      nombre: 'Ensalada Rusa',
+      descripcion: 'Papa, zanahoria, arvejas y mayonesa casera.',
+      categoria: 'Entrada',
+      region: 'Nacional',
+      precio: 18.0,
+      imagenUrl: '',
     ),
   ];
 
@@ -167,6 +216,47 @@ class SupabaseWeeklyMenuRepository {
           platoRegion: dish.region,
           tipoPlato: dish.categoria,
           estado: 'publicado',
+          imagenUrl: dish.imagenUrl,
+        ),
+      );
+    }
+
+    const dailySoups = [4, 7, 13, 14, 15];
+    for (var day = 0; day < dailySoups.length; day++) {
+      final date = monday.add(Duration(days: day));
+      final soup = defaultCatalogo.firstWhere((d) => d.id == dailySoups[day]);
+      _inMemoryMenuSemanal.add(
+        MenuSemanalItem(
+          id: autoId++,
+          fecha: date,
+          diaSemana: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'][day],
+          platoCatalogoId: soup.id,
+          platoNombre: soup.nombre,
+          platoDescripcion: soup.descripcion,
+          platoRegion: soup.region,
+          tipoPlato: soup.categoria,
+          estado: 'publicado',
+          imagenUrl: soup.imagenUrl,
+        ),
+      );
+    }
+
+    const dailySalads = [16, 17, 16, 17, 16];
+    for (var day = 0; day < dailySalads.length; day++) {
+      final date = monday.add(Duration(days: day));
+      final salad = defaultCatalogo.firstWhere((d) => d.id == dailySalads[day]);
+      _inMemoryMenuSemanal.add(
+        MenuSemanalItem(
+          id: autoId++,
+          fecha: date,
+          diaSemana: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'][day],
+          platoCatalogoId: salad.id,
+          platoNombre: salad.nombre,
+          platoDescripcion: salad.descripcion,
+          platoRegion: salad.region,
+          tipoPlato: salad.categoria,
+          estado: 'publicado',
+          imagenUrl: salad.imagenUrl,
         ),
       );
     }
@@ -179,30 +269,86 @@ class SupabaseWeeklyMenuRepository {
       return defaultCatalogo;
     }
 
+    // 1. Intentar consultar 'platos_catalogo'
     try {
       final response = await client
           .from('platos_catalogo')
           .select()
-          .eq('activo', true)
           .order('id', ascending: true);
 
       final List<dynamic> data = response as List<dynamic>;
-      if (data.isEmpty) {
-        return defaultCatalogo;
+      if (data.isNotEmpty) {
+        return data.map((item) {
+          final map = item as Map<String, dynamic>;
+          final dish = PlatoCatalogo.fromJson(map);
+          final rawImg =
+              map['imagen_path'] ?? map['imagen_url'] ?? map['image_url'];
+          return dish.copyWith(
+            imagenUrl: resolveDatabaseDishImage(
+              rawImg?.toString(),
+              dishName: dish.nombre,
+              dishId: dish.id,
+            ),
+          );
+        }).toList();
       }
-      return data
-          .map((item) => PlatoCatalogo.fromJson(item as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      debugPrint('⚠️ Error obteniendo catálogo boliviano de Supabase ($e). Usando catálogo base.');
-      return defaultCatalogo;
-    }
+    } catch (_) {}
+
+    // 2. Intentar consultar la tabla principal 'platos' de Supabase
+    try {
+      final response = await client
+          .from('platos')
+          .select()
+          .order('id', ascending: true);
+
+      final List<dynamic> data = response as List<dynamic>;
+      if (data.isNotEmpty) {
+        return data.map((item) {
+          final map = Map<String, dynamic>.from(item as Map);
+          final rawImg =
+              map['imagen_path'] ?? map['imagen_url'] ?? map['image_url'];
+          final idVal = map['id'] is int
+              ? map['id'] as int
+              : int.tryParse(map['id']?.toString() ?? '0') ?? 0;
+          final nameVal =
+              map['nombre']?.toString() ?? map['name']?.toString() ?? 'Plato';
+          final descVal =
+              map['descripcion']?.toString() ?? 'Plato registrado en Supabase';
+          final tipoVal =
+              map['tipo']?.toString() ??
+              map['categoria']?.toString() ??
+              'Segundo';
+
+          return PlatoCatalogo(
+            id: idVal,
+            nombre: nameVal,
+            descripcion: descVal,
+            categoria: tipoVal,
+            region: map['region']?.toString() ?? 'Bolivia',
+            precio: (map['precio'] as num?)?.toDouble() ?? 18.0,
+            imagenUrl: resolveDatabaseDishImage(
+              rawImg?.toString(),
+              dishName: nameVal,
+              dishId: idVal,
+            ),
+            activo:
+                map['activo'] == true ||
+                map['activo'] == 1 ||
+                map['activo'] == null,
+          );
+        }).toList();
+      }
+    } catch (_) {}
+
+    return defaultCatalogo;
   }
 
   /// Obtiene los platos configurados para la semana indicada
   Future<List<MenuSemanalItem>> getMenuSemanal(DateTime startOfWeek) async {
     final client = SupabaseConfig.client;
-    final monday = startOfWeek.subtract(Duration(days: startOfWeek.weekday - 1));
+    final monday = startOfWeek.subtract(
+      Duration(days: startOfWeek.weekday - 1),
+    );
     final friday = monday.add(const Duration(days: 4));
 
     final mondayStr =
@@ -220,6 +366,7 @@ class SupabaseWeeklyMenuRepository {
       }).toList();
     }
 
+    // Nivel 1: Consultar 'menu_semanal' con join de 'platos_catalogo'
     try {
       final response = await client
           .from('menu_semanal')
@@ -229,16 +376,210 @@ class SupabaseWeeklyMenuRepository {
           .order('fecha', ascending: true);
 
       final List<dynamic> data = response as List<dynamic>;
-      if (data.isEmpty) {
-        return _inMemoryMenuSemanal;
+      if (data.isNotEmpty) {
+        return data.map((item) {
+          final map = item as Map<String, dynamic>;
+          final menuItem = MenuSemanalItem.fromJson(map);
+          final catalog = map['platos_catalogo'];
+          final catalogMap = catalog is Map ? catalog : null;
+          final rawImg =
+              map['imagen_path'] ??
+              map['imagen_url'] ??
+              map['image_url'] ??
+              catalogMap?['imagen_path'] ??
+              catalogMap?['imagen_url'] ??
+              catalogMap?['image_url'];
+          return menuItem.copyWith(
+            imagenUrl: resolveDatabaseDishImage(
+              rawImg?.toString(),
+              dishName: menuItem.platoNombre,
+              dishId: menuItem.platoCatalogoId,
+            ),
+          );
+        }).toList();
       }
-      return data
-          .map((item) => MenuSemanalItem.fromJson(item as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      debugPrint('⚠️ Error al consultar menú semanal en Supabase ($e). Retornando memoria.');
-      return _inMemoryMenuSemanal;
+    } catch (e1) {
+      debugPrint('ℹ️ Fallback 1 Supabase menu_semanal ($e1).');
     }
+
+    // Nivel 2: Consultar 'menu_dias' con 'menu_dia_platos' y 'platos' (esquema relacional de Supabase)
+    try {
+      final menuDiasRes = await client
+          .from('menu_dias')
+          .select('id, fecha, menu_dia_platos(platos(*))')
+          .gte('fecha', mondayStr)
+          .lte('fecha', fridayStr)
+          .order('fecha', ascending: true);
+
+      final List<dynamic> daysData = menuDiasRes as List<dynamic>;
+      if (daysData.isNotEmpty) {
+        final List<MenuSemanalItem> itemsFromDb = [];
+        int tempId = 1;
+
+        for (final dayRow in daysData) {
+          final fechaParsed =
+              DateTime.tryParse(dayRow['fecha']?.toString() ?? '') ??
+              DateTime.now();
+          final dayName = AppDateUtils.getDiaSemana(fechaParsed);
+          final relations = dayRow['menu_dia_platos'] as List<dynamic>? ?? [];
+
+          for (final rel in relations) {
+            final platoData = rel['platos'];
+            if (platoData is Map<String, dynamic>) {
+              final rawImg =
+                  platoData['imagen_path'] ??
+                  platoData['imagen_url'] ??
+                  platoData['image_url'];
+              final platoNom = platoData['nombre']?.toString() ?? 'Plato';
+              final platoId = platoData['id'] is int
+                  ? platoData['id'] as int
+                  : int.tryParse(platoData['id']?.toString() ?? '0') ?? 0;
+
+              itemsFromDb.add(
+                MenuSemanalItem(
+                  id: tempId++,
+                  fecha: fechaParsed,
+                  diaSemana: dayName,
+                  platoCatalogoId: platoId,
+                  platoNombre: platoNom,
+                  platoDescripcion:
+                      platoData['descripcion']?.toString() ??
+                      'Plato de la base de datos Supabase',
+                  platoRegion: platoData['region']?.toString() ?? 'Bolivia',
+                  tipoPlato:
+                      platoData['tipo']?.toString() ??
+                      platoData['categoria']?.toString() ??
+                      'Segundo',
+                  estado: 'publicado',
+                  imagenUrl: resolveDatabaseDishImage(
+                    rawImg?.toString(),
+                    dishName: platoNom,
+                    dishId: platoId,
+                  ),
+                ),
+              );
+            }
+          }
+        }
+
+        if (itemsFromDb.isNotEmpty) {
+          return itemsFromDb;
+        }
+      }
+    } catch (e2) {
+      debugPrint('ℹ️ Fallback 2 Supabase menu_dias ($e2).');
+    }
+
+    // Nivel 3: Consultar directamente la tabla 'platos' de Supabase
+    try {
+      final platosRes = await client
+          .from('platos')
+          .select()
+          .order('id', ascending: true);
+
+      final List<dynamic> platosList = platosRes as List<dynamic>;
+      if (platosList.isNotEmpty) {
+        final List<MenuSemanalItem> weekFromPlatos = [];
+        final weekDayNames = [
+          'Lunes',
+          'Martes',
+          'Miércoles',
+          'Jueves',
+          'Viernes',
+        ];
+
+        for (int i = 0; i < 5; i++) {
+          final targetDate = monday.add(Duration(days: i));
+          final platoData =
+              platosList[i % platosList.length] as Map<String, dynamic>;
+          final rawImg =
+              platoData['imagen_path'] ??
+              platoData['imagen_url'] ??
+              platoData['image_url'];
+          final platoNom = platoData['nombre']?.toString() ?? 'Plato';
+          final platoId = platoData['id'] is int
+              ? platoData['id'] as int
+              : int.tryParse(platoData['id']?.toString() ?? '0') ?? 0;
+
+          weekFromPlatos.add(
+            MenuSemanalItem(
+              id: 200 + i,
+              fecha: targetDate,
+              diaSemana: weekDayNames[i],
+              platoCatalogoId: platoId,
+              platoNombre: platoNom,
+              platoDescripcion:
+                  platoData['descripcion']?.toString() ??
+                  'Plato registrado en base de datos Supabase',
+              platoRegion: platoData['region']?.toString() ?? 'Bolivia',
+              tipoPlato:
+                  platoData['tipo']?.toString() ??
+                  platoData['categoria']?.toString() ??
+                  'Segundo',
+              estado: 'publicado',
+              imagenUrl: resolveDatabaseDishImage(
+                rawImg?.toString(),
+                dishName: platoNom,
+                dishId: platoId,
+              ),
+            ),
+          );
+
+          if (platosList.length > 5) {
+            final secondIdx = (i + 5) % platosList.length;
+            final secondPlato = platosList[secondIdx] as Map<String, dynamic>;
+            final secondImg =
+                secondPlato['imagen_path'] ??
+                secondPlato['imagen_url'] ??
+                secondPlato['image_url'];
+            final secondNom =
+                secondPlato['nombre']?.toString() ?? 'Plato Alternativo';
+            final secondId = secondPlato['id'] is int
+                ? secondPlato['id'] as int
+                : int.tryParse(secondPlato['id']?.toString() ?? '0') ?? 0;
+
+            weekFromPlatos.add(
+              MenuSemanalItem(
+                id: 300 + i,
+                fecha: targetDate,
+                diaSemana: weekDayNames[i],
+                platoCatalogoId: secondId,
+                platoNombre: secondNom,
+                platoDescripcion:
+                    secondPlato['descripcion']?.toString() ??
+                    'Opción alternativa desde Supabase',
+                platoRegion: secondPlato['region']?.toString() ?? 'Bolivia',
+                tipoPlato:
+                    secondPlato['tipo']?.toString() ??
+                    secondPlato['categoria']?.toString() ??
+                    'Segundo',
+                estado: 'publicado',
+                imagenUrl: resolveDatabaseDishImage(
+                  secondImg?.toString(),
+                  dishName: secondNom,
+                  dishId: secondId,
+                ),
+              ),
+            );
+          }
+        }
+
+        if (weekFromPlatos.isNotEmpty) {
+          return weekFromPlatos;
+        }
+      }
+    } catch (e3) {
+      debugPrint('ℹ️ Fallback 3 Supabase platos ($e3).');
+    }
+
+    // Nivel 4: Si no hay conexión o fallan las tablas remotas, retornar memoria local
+    return _inMemoryMenuSemanal.where((item) {
+      final d = DateTime(item.fecha.year, item.fecha.month, item.fecha.day);
+      final start = DateTime(monday.year, monday.month, monday.day);
+      final end = DateTime(friday.year, friday.month, friday.day);
+      return (d.isAfter(start.subtract(const Duration(days: 1))) &&
+          d.isBefore(end.add(const Duration(days: 1))));
+    }).toList();
   }
 
   /// Obtiene el menú de la semana que ya ha sido publicado y está visible para empleados
@@ -276,6 +617,7 @@ class SupabaseWeeklyMenuRepository {
           platoRegion: plato.region,
           tipoPlato: plato.categoria,
           estado: 'borrador',
+          imagenUrl: plato.imagenUrl,
         );
         _inMemoryMenuSemanal.add(newItem);
 
@@ -289,7 +631,9 @@ class SupabaseWeeklyMenuRepository {
               'estado': 'borrador',
             });
           } catch (e) {
-            debugPrint('⚠️ Error al insertar plato en menú semanal Supabase: $e');
+            debugPrint(
+              '⚠️ Error al insertar plato en menú semanal Supabase: $e',
+            );
           }
         }
       }
@@ -316,10 +660,10 @@ class SupabaseWeeklyMenuRepository {
   }
 
   /// Publica el menú semanal (cambia el estado de borrador a 'publicado')
-  Future<bool> publicarMenuSemanal({
-    required DateTime startOfWeek,
-  }) async {
-    final monday = startOfWeek.subtract(Duration(days: startOfWeek.weekday - 1));
+  Future<bool> publicarMenuSemanal({required DateTime startOfWeek}) async {
+    final monday = startOfWeek.subtract(
+      Duration(days: startOfWeek.weekday - 1),
+    );
     final friday = monday.add(const Duration(days: 4));
 
     final mondayStr =

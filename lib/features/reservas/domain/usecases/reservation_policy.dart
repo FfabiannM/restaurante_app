@@ -4,10 +4,7 @@ class PolicyCheckResult {
   final bool isAllowed;
   final String message;
 
-  const PolicyCheckResult({
-    required this.isAllowed,
-    required this.message,
-  });
+  const PolicyCheckResult({required this.isAllowed, required this.message});
 
   static const PolicyCheckResult allowed = PolicyCheckResult(
     isAllowed: true,
@@ -16,6 +13,9 @@ class PolicyCheckResult {
 }
 
 class ReservationPolicy {
+  static const int deliveryStartHour = 12;
+  static const int deliveryEndHour = 14;
+
   bool _isSameDay(DateTime d1, DateTime d2) {
     return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
   }
@@ -70,7 +70,8 @@ class ReservationPolicy {
     // Regla 4: Bloqueo Horario para reservas del mismo día
     // Si es hoy, el límite estricto son las 9:00 AM (9:01 ya no es permitido)
     if (_isSameDay(target, today)) {
-      if (currentTime.hour > 9 || (currentTime.hour == 9 && currentTime.minute > 0)) {
+      if (currentTime.hour > 9 ||
+          (currentTime.hour == 9 && currentTime.minute > 0)) {
         return const PolicyCheckResult(
           isAllowed: false,
           message:
@@ -128,11 +129,43 @@ class ReservationPolicy {
     DateTime currentTime, {
     List<Holiday> holidays = const [],
   }) {
-    return checkCanReserve(selectedDate, currentTime, holidays: holidays)
-        .isAllowed;
+    return checkCanReserve(
+      selectedDate,
+      currentTime,
+      holidays: holidays,
+    ).isAllowed;
   }
 
   bool canCancel(DateTime selectedDate, DateTime currentTime) {
     return checkCanCancel(selectedDate, currentTime).isAllowed;
+  }
+
+  /// La entrega solo se registra el día de la reserva, durante el servicio.
+  PolicyCheckResult checkCanDeliver(
+    DateTime reservationDate,
+    DateTime currentTime,
+  ) {
+    if (!_isSameDay(reservationDate, currentTime)) {
+      return const PolicyCheckResult(
+        isAllowed: false,
+        message: 'La entrega solo puede registrarse el día del almuerzo.',
+      );
+    }
+
+    final currentMinutes = currentTime.hour * 60 + currentTime.minute;
+    const startMinutes = deliveryStartHour * 60;
+    const endMinutes = deliveryEndHour * 60;
+    if (currentMinutes < startMinutes || currentMinutes >= endMinutes) {
+      return const PolicyCheckResult(
+        isAllowed: false,
+        message: 'La entrega está habilitada únicamente de 12:00 a 14:00.',
+      );
+    }
+
+    return PolicyCheckResult.allowed;
+  }
+
+  bool canDeliver(DateTime reservationDate, DateTime currentTime) {
+    return checkCanDeliver(reservationDate, currentTime).isAllowed;
   }
 }

@@ -104,7 +104,7 @@ class SupabaseFamilyRepository implements FamilyRepository {
 
       final List<dynamic> data = response as List<dynamic>;
       if (data.isEmpty) {
-        return _getMockFamily(empleadoId);
+        return [];
       }
 
       final list = data
@@ -113,14 +113,18 @@ class SupabaseFamilyRepository implements FamilyRepository {
 
       return FamilyPolicy.enforceLimit(list);
     } catch (e) {
-      debugPrint('⚠️ Error consultando familiares en Supabase ($e). Usando datos precargados.');
+      debugPrint(
+        '⚠️ Error consultando familiares en Supabase ($e). Usando datos precargados.',
+      );
       return _getMockFamily(empleadoId);
     }
   }
 
   @override
   Future<bool> canUseRestaurantService(
-      String empleadoId, String familiarId) async {
+    String empleadoId,
+    String familiarId,
+  ) async {
     final members = await getFamilyMembers(empleadoId);
     return FamilyPolicy.isFamilyMemberAuthorized(
       familiarId: familiarId,
@@ -132,27 +136,6 @@ class SupabaseFamilyRepository implements FamilyRepository {
     if (_mockFamilyStore.containsKey(empleadoId)) {
       return FamilyPolicy.enforceLimit(_mockFamilyStore[empleadoId]!);
     }
-    // Generar 2 familiares por defecto para cualquier empleado registrado
-    final defaultMembers = [
-      Familiar(
-        id: 'fam-$empleadoId-1',
-        empleadoId: empleadoId,
-        ci: '7728192',
-        nombres: 'Andrea',
-        apellidos: 'Familiar',
-        parentesco: 'Hija',
-        activo: true,
-      ),
-      Familiar(
-        id: 'fam-$empleadoId-2',
-        empleadoId: empleadoId,
-        ci: '7728193',
-        nombres: 'Lucas',
-        apellidos: 'Familiar',
-        parentesco: 'Cónyuge',
-        activo: true,
-      ),
-    ];
-    return FamilyPolicy.enforceLimit(defaultMembers);
+    return [];
   }
 }

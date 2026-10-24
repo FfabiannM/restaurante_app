@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:restaurante_app/core/utils/date_utils.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
 import 'package:restaurante_app/features/reservas/domain/usecases/reservation_policy.dart';
@@ -44,14 +45,12 @@ class _MyReservationsScreenState extends ConsumerState<MyReservationsScreen>
     final upcoming = reservations.where((r) {
       final rDate = DateTime(r.date.year, r.date.month, r.date.day);
       return !rDate.isBefore(today);
-    }).toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
+    }).toList()..sort((a, b) => a.date.compareTo(b.date));
 
     final past = reservations.where((r) {
       final rDate = DateTime(r.date.year, r.date.month, r.date.day);
       return rDate.isBefore(today);
-    }).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    }).toList()..sort((a, b) => b.date.compareTo(a.date));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -69,10 +68,7 @@ class _MyReservationsScreenState extends ConsumerState<MyReservationsScreen>
             ),
             Text(
               'Control de almuerzos y tickets de retiro',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.white70,
-              ),
+              style: TextStyle(fontSize: 12, color: Colors.white70),
             ),
           ],
         ),
@@ -84,9 +80,7 @@ class _MyReservationsScreenState extends ConsumerState<MyReservationsScreen>
             icon: const Icon(Icons.refresh, color: Colors.white),
             tooltip: 'Actualizar',
             onPressed: () {
-              ref
-                  .read(userReservationsProvider.notifier)
-                  .loadReservations();
+              ref.read(userReservationsProvider.notifier).loadReservations();
             },
           ),
         ],
@@ -105,8 +99,18 @@ class _MyReservationsScreenState extends ConsumerState<MyReservationsScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildReservationList(upcoming, policyUseCase, currentTime, isUpcoming: true),
-          _buildReservationList(past, policyUseCase, currentTime, isUpcoming: false),
+          _buildReservationList(
+            upcoming,
+            policyUseCase,
+            currentTime,
+            isUpcoming: true,
+          ),
+          _buildReservationList(
+            past,
+            policyUseCase,
+            currentTime,
+            isUpcoming: false,
+          ),
         ],
       ),
     );
@@ -141,7 +145,10 @@ class _MyReservationsScreenState extends ConsumerState<MyReservationsScreen>
                     ? 'No tienes reservas próximas activas.'
                     : 'Aún no hay reservas en tu historial.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -154,7 +161,10 @@ class _MyReservationsScreenState extends ConsumerState<MyReservationsScreen>
       itemCount: list.length,
       itemBuilder: (context, index) {
         final res = list[index];
-        final canCancelCheck = policyUseCase.checkCanCancel(res.date, currentTime);
+        final canCancelCheck = policyUseCase.checkCanCancel(
+          res.date,
+          currentTime,
+        );
 
         return Container(
           margin: const EdgeInsets.only(bottom: 14),
@@ -273,9 +283,9 @@ class _MyReservationsScreenState extends ConsumerState<MyReservationsScreen>
                           onPressed: canCancelCheck.isAllowed
                               ? () => _cancelReservation(res.id)
                               : () => _showCancelPolicyAlert(
-                                    context,
-                                    canCancelCheck.message,
-                                  ),
+                                  context,
+                                  canCancelCheck.message,
+                                ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: canCancelCheck.isAllowed
                                 ? Colors.red.shade600
@@ -430,10 +440,7 @@ class _MyReservationsScreenState extends ConsumerState<MyReservationsScreen>
             const SizedBox(height: 16),
             const Text(
               'Ticket de Retiro',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
             const Text(
               'Presenta este comprobante en el mostrador del restaurante',
@@ -450,10 +457,17 @@ class _MyReservationsScreenState extends ConsumerState<MyReservationsScreen>
               ),
               child: Column(
                 children: [
-                  Icon(
-                    Icons.qr_code_2,
+                  QrImageView(
+                    data: 'reserva:${res.id}',
                     size: 140,
-                    color: Theme.of(context).colorScheme.primary,
+                    eyeStyle: QrEyeStyle(
+                      eyeShape: QrEyeShape.square,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    dataModuleStyle: QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.square,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(

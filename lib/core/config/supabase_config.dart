@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseConfig {
+  static const String dishImagesBucket = 'platos';
+
   /// URL del proyecto Supabase.
   /// Puede ser configurada mediante variables de entorno (--dart-define=SUPABASE_URL=...)
   /// o editando esta constante con tu URL de Supabase.
@@ -32,6 +34,28 @@ class SupabaseConfig {
       }
     }
     return null;
+  }
+
+  /// Convierte una ruta guardada en la tabla `platos` en una URL pública del
+  /// bucket de imágenes. Las rutas locales se dejan para el fallback de demo.
+  static String? publicDishImageUrl(String? rawPath) {
+    final path = rawPath?.trim() ?? '';
+    if (path.isEmpty) return null;
+
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    if (path.startsWith('assets/')) return null;
+
+    final normalizedPath = path
+        .replaceFirst(RegExp(r'^/+'), '')
+        .replaceFirst(RegExp('^$dishImagesBucket/'), '');
+    final supabaseClient = client;
+    if (supabaseClient == null || normalizedPath.isEmpty) return null;
+
+    return supabaseClient.storage
+        .from(dishImagesBucket)
+        .getPublicUrl(normalizedPath);
   }
 
   /// Inicializa Supabase de manera tolerante a fallos.
@@ -83,7 +107,8 @@ class SupabaseConfig {
     } catch (e) {
       return {
         'connected': true,
-        'message': 'Cliente conectado con éxito al endpoint (RLS o permisos requeridos): $e',
+        'message':
+            'Cliente conectado con éxito al endpoint (RLS o permisos requeridos): $e',
         'url': supabaseUrl,
       };
     }

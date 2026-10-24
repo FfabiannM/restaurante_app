@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'package:restaurante_app/core/utils/date_utils.dart';
 import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:restaurante_app/features/menu/data/dish_image_resolver.dart';
+import 'package:restaurante_app/features/menu/domain/bolivian_dish_entity.dart';
 import 'package:restaurante_app/features/menu/presentation/providers/weekly_menu_provider.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
+import 'package:restaurante_app/features/reservas/domain/usecases/reservation_policy.dart';
 import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
 
 class KitchenScreen extends ConsumerStatefulWidget {
@@ -27,7 +31,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _loadOrders();
   }
 
@@ -59,9 +63,29 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
   }
 
   Future<void> _markAsDelivered(Reservation order) async {
+    final deliveryCheck = ReservationPolicy().checkCanDeliver(
+      order.date,
+      DateTime.now(),
+    );
+    if (!deliveryCheck.isAllowed) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(deliveryCheck.message),
+            backgroundColor: Colors.orange.shade800,
+          ),
+        );
+      }
+      return;
+    }
+
     try {
       final repo = ref.read(reservationRepositoryProvider);
-      await repo.updateReservationStatus(order.id, 'entregada');
+      // Los pedidos del plan mensual se construyen desde el padrón diario y
+      // no tienen una fila individual en `reservas`.
+      if (!order.id.startsWith('monthly-')) {
+        await repo.updateReservationStatus(order.id, 'entregada');
+      }
       if (mounted) {
         setState(() {
           final index = _orders.indexWhere((o) => o.id == order.id);
@@ -143,9 +167,9 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
             tooltip: 'Actualizar',
             onPressed: () {
               _loadOrders();
-              ref.read(weeklyMenuProvider.notifier).loadWeek(
-                    ref.read(selectedWeekProvider),
-                  );
+              ref
+                  .read(weeklyMenuProvider.notifier)
+                  .loadWeek(ref.read(selectedWeekProvider));
             },
           ),
           IconButton(
@@ -163,8 +187,14 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
           indicatorColor: Colors.white,
           indicatorWeight: 3,
           tabs: const [
-            Tab(icon: Icon(Icons.dashboard_outlined), text: 'Resumen & Totales'),
+            Tab(
+              icon: Icon(Icons.dashboard_outlined),
+              text: 'Resumen & Totales',
+            ),
+            Tab(icon: Icon(Icons.card_membership), text: 'Plan mensual'),
+            Tab(icon: Icon(Icons.person), text: 'Empleados regulares'),
             Tab(icon: Icon(Icons.restaurant_menu), text: 'Menú Semanal'),
+            Tab(icon: Icon(Icons.calendar_month), text: 'Calendario'),
           ],
         ),
       ),
@@ -172,7 +202,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
         controller: _tabController,
         children: [
           _buildSummaryAndOrdersTab(),
+          _buildEmployeeReservationsTab(monthlyPlan: true),
+          _buildEmployeeReservationsTab(monthlyPlan: false),
           _buildWeeklyMenuPlanningTab(),
+          _buildReservationsCalendarTab(),
         ],
       ),
     );
@@ -189,9 +222,18 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
     }).toList();
 
     final totalOrders = _orders.where((o) => o.status != 'cancelada').length;
-    final deliveredOrders =
-        _orders.where((o) => o.status == 'entregada').length;
+    final deliveredOrders = _orders
+        .where((o) => o.status == 'entregada')
+        .length;
     final pendingOrders = totalOrders - deliveredOrders;
+    final totalCharge = _orders
+        .where((o) => o.status != 'cancelada')
+        .fold<double>(0, (sum, order) => sum + order.price);
+    final ordersByEmployee = <String, int>{};
+    for (final order in _orders.where((o) => o.status != 'cancelada')) {
+      ordersByEmployee[order.userId] =
+          (ordersByEmployee[order.userId] ?? 0) + 1;
+    }
 
     // Métricas agrupadas por plato
     final Map<String, int> dishCounts = {};
@@ -238,8 +280,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                       ),
                     ),
                     IconButton(
-                      icon:
-                          const Icon(Icons.calendar_month, color: Colors.blue),
+                      icon: const Icon(
+                        Icons.calendar_month,
+                        color: Colors.blue,
+                      ),
                       onPressed: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -260,15 +304,51 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     Expanded(
-                        child: _buildMetric(
-                            'Total Pedidos', '$totalOrders', Colors.blue)),
+                      child: _buildMetric(
+                        'Total Pedidos',
+                        '$totalOrders',
+                        Colors.blue,
+                      ),
+                    ),
                     Expanded(
-                        child: _buildMetric(
-                            'Pendientes', '$pendingOrders', Colors.orange)),
+                      child: _buildMetric(
+                        'Pendientes',
+                        '$pendingOrders',
+                        Colors.orange,
+                      ),
+                    ),
                     Expanded(
-                        child: _buildMetric(
-                            'Entregados', '$deliveredOrders', Colors.green)),
+                      child: _buildMetric(
+                        'Entregados',
+                        '$deliveredOrders',
+                        Colors.green,
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildMetric(
+                        'Cobro total',
+                        'Bs ${totalCharge.toStringAsFixed(2)}',
+                        Colors.deepPurple,
+                      ),
+                    ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Total de almuerzos a registrar: $totalOrders',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Entregas habilitadas hoy de 12:00 a 14:00',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -288,8 +368,11 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.pie_chart_outline,
-                        color: Color(0xFF2563EB), size: 20),
+                    Icon(
+                      Icons.pie_chart_outline,
+                      color: Color(0xFF2563EB),
+                      size: 20,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -314,14 +397,17 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                           color: Colors.blue.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: Colors.blue.withValues(alpha: 0.2)),
+                            color: Colors.blue.withValues(alpha: 0.2),
+                          ),
                         ),
                         child: Column(
                           children: [
                             const Text(
                               'Turno 1 (12:00 PM)',
                               style: TextStyle(
-                                  fontSize: 11.5, fontWeight: FontWeight.bold),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             Text(
                               '$turno1 raciones',
@@ -343,14 +429,17 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                           color: Colors.purple.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: Colors.purple.withValues(alpha: 0.2)),
+                            color: Colors.purple.withValues(alpha: 0.2),
+                          ),
                         ),
                         child: Column(
                           children: [
                             const Text(
                               'Turno 2 (13:00 PM)',
                               style: TextStyle(
-                                  fontSize: 11.5, fontWeight: FontWeight.bold),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             Text(
                               '$turno2 raciones',
@@ -371,9 +460,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                 const Text(
                   'Producción requerida en cocina:',
                   style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
                 ),
                 const SizedBox(height: 6),
 
@@ -393,15 +483,15 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Expanded(
                                 child: Text(
                                   entry.key,
                                   style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
                               Text(
@@ -484,6 +574,17 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                 final order = filtered[index];
                 final isDelivered = order.status == 'entregada';
                 final isCancelled = order.status == 'cancelada';
+                final employeeOrderCount = ordersByEmployee[order.userId] ?? 1;
+                final employeeCharge = _orders
+                    .where(
+                      (o) =>
+                          o.userId == order.userId && o.status != 'cancelada',
+                    )
+                    .fold<double>(0, (sum, item) => sum + item.price);
+                final deliveryCheck = ReservationPolicy().checkCanDeliver(
+                  order.date,
+                  DateTime.now(),
+                );
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 10),
@@ -495,8 +596,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                       color: isDelivered
                           ? Colors.green.shade300
                           : isCancelled
-                              ? Colors.red.shade200
-                              : Colors.grey.shade200,
+                          ? Colors.red.shade200
+                          : Colors.grey.shade200,
                     ),
                   ),
                   child: Row(
@@ -505,19 +606,19 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                         backgroundColor: isDelivered
                             ? Colors.green.shade100
                             : isCancelled
-                                ? Colors.red.shade100
-                                : Colors.blue.shade100,
+                            ? Colors.red.shade100
+                            : Colors.blue.shade100,
                         child: Icon(
                           isDelivered
                               ? Icons.check
                               : isCancelled
-                                  ? Icons.close
-                                  : Icons.person,
+                              ? Icons.close
+                              : Icons.person,
                           color: isDelivered
                               ? Colors.green
                               : isCancelled
-                                  ? Colors.red
-                                  : Colors.blue,
+                              ? Colors.red
+                              : Colors.blue,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -539,6 +640,16 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                                 fontSize: 13,
                               ),
                             ),
+                            if (employeeOrderCount > 1)
+                              Text(
+                                'Reserva familiar: $employeeOrderCount almuerzos · '
+                                'Cobro: Bs ${employeeCharge.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: Colors.indigo.shade700,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             if (order.notes != null)
                               Text(
                                 'Nota: ${order.notes}',
@@ -553,7 +664,9 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                       ),
                       if (!isDelivered && !isCancelled)
                         ElevatedButton(
-                          onPressed: () => _markAsDelivered(order),
+                          onPressed: deliveryCheck.isAllowed
+                              ? () => _markAsDelivered(order)
+                              : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             padding: const EdgeInsets.symmetric(
@@ -582,6 +695,303 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
     );
   }
 
+  Widget _buildReservationsCalendarTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.96),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: TableCalendar<void>(
+              firstDay: DateTime(2025),
+              lastDay: DateTime(2030),
+              focusedDay: _selectedDate,
+              selectedDayPredicate: (day) =>
+                  AppDateUtils.isSameDay(day, _selectedDate),
+              onDaySelected: (selectedDay, focusedDay) {
+                setState(() => _selectedDate = selectedDay);
+                _loadOrders();
+              },
+              calendarFormat: CalendarFormat.month,
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+              ),
+              calendarBuilders: CalendarBuilders<void>(
+                markerBuilder: (context, date, events) {
+                  final hasReservation = _orders.any(
+                    (order) =>
+                        order.status != 'cancelada' &&
+                        AppDateUtils.isSameDay(order.date, date),
+                  );
+                  return hasReservation
+                      ? const Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Icon(
+                            Icons.circle,
+                            size: 6,
+                            color: Colors.green,
+                          ),
+                        )
+                      : null;
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Reservas del ${AppDateUtils.formatFullDate(_selectedDate)}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_orders.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'No hay reservas para la fecha seleccionada.',
+                style: TextStyle(color: Colors.white),
+              ),
+            )
+          else
+            ..._orders.map(
+              (order) => Card(
+                child: ListTile(
+                  leading: const Icon(Icons.lunch_dining),
+                  title: Text(order.displayName),
+                  subtitle: Text('${order.dishName} · ${order.status}'),
+                  trailing: Text('Bs ${order.price.toStringAsFixed(2)}'),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmployeeReservationsTab({required bool monthlyPlan}) {
+    final reservations = _orders
+        .where(
+          (order) =>
+              order.status != 'cancelada' &&
+              (order.type == 'pension') == monthlyPlan,
+        )
+        .toList();
+    final grouped = <String, List<Reservation>>{};
+    for (final reservation in reservations) {
+      grouped.putIfAbsent(reservation.userId, () => []).add(reservation);
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildEmployeeTabHeader(
+            monthlyPlan: monthlyPlan,
+            employeeCount: grouped.length,
+            lunchCount: reservations.length,
+          ),
+          const SizedBox(height: 12),
+          if (grouped.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                monthlyPlan
+                    ? 'No hay empleados con plan mensual para esta fecha.'
+                    : 'No hay empleados regulares con reservas para esta fecha.',
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            ...grouped.values.map(_buildEmployeeReservationCard),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmployeeTabHeader({
+    required bool monthlyPlan,
+    required int employeeCount,
+    required int lunchCount,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            monthlyPlan
+                ? 'Empleados con plan mensual'
+                : 'Empleados regulares sin plan mensual',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '$employeeCount empleados · $lunchCount almuerzos registrados',
+            style: TextStyle(color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            AppDateUtils.formatFullDate(_selectedDate),
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmployeeReservationCard(List<Reservation> reservations) {
+    final employee = reservations.first;
+    final selfReservations = reservations
+        .where((reservation) => !reservation.isForFamiliar)
+        .toList();
+    final familyReservations = reservations
+        .where((reservation) => reservation.isForFamiliar)
+        .toList();
+    final totalCharge = reservations.fold<double>(
+      0,
+      (sum, reservation) => sum + reservation.price,
+    );
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.blueGrey.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.blue.shade50,
+                child: Icon(Icons.person, color: Colors.blue.shade700),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  employee.userName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              Text(
+                'Bs ${totalCharge.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: Colors.deepPurple.shade700,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildCountChip(
+                'Empleado: ${selfReservations.length}',
+                Colors.blue,
+              ),
+              _buildCountChip(
+                'Familiares: ${familyReservations.length}',
+                Colors.teal,
+              ),
+              _buildCountChip(
+                'Total: ${reservations.length} almuerzos',
+                Colors.deepPurple,
+              ),
+            ],
+          ),
+          const Divider(height: 22),
+          ...reservations.map(
+            (reservation) => _buildBeneficiaryRow(reservation),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCountChip(String label, MaterialColor color) {
+    return Chip(
+      label: Text(label),
+      labelStyle: TextStyle(
+        color: color.shade800,
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+      ),
+      backgroundColor: color.shade50,
+      side: BorderSide(color: color.shade100),
+    );
+  }
+
+  Widget _buildBeneficiaryRow(Reservation reservation) {
+    final isDelivered = reservation.isDelivered;
+    final deliveryCheck = ReservationPolicy().checkCanDeliver(
+      reservation.date,
+      DateTime.now(),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(
+            reservation.isForFamiliar ? Icons.family_restroom : Icons.person,
+            size: 20,
+            color: reservation.isForFamiliar ? Colors.teal : Colors.blue,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              reservation.isForFamiliar
+                  ? '${reservation.displayName} (familiar)'
+                  : '${reservation.displayName} (empleado)',
+              style: const TextStyle(fontSize: 12.5),
+            ),
+          ),
+          if (isDelivered)
+            const Text(
+              'Entregado',
+              style: TextStyle(
+                color: Colors.green,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            )
+          else
+            TextButton(
+              onPressed: deliveryCheck.isAllowed
+                  ? () => _markAsDelivered(reservation)
+                  : null,
+              child: const Text('Entregar'),
+            ),
+        ],
+      ),
+    );
+  }
+
   // ===========================================================================
   // TAB 2: GESTIÓN DE MENÚ SEMANAL (SELECTOR ÁGIL DE PLATOS BOLIVIANOS)
   // ===========================================================================
@@ -598,8 +1008,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
       {'name': 'Viernes', 'offset': 4},
     ];
 
-    final currentTargetDate =
-        weekStart.add(Duration(days: _selectedDayIndex));
+    final currentTargetDate = weekStart.add(Duration(days: _selectedDayIndex));
     final assignedItemsToday = weeklyState.itemsForDay(currentTargetDate);
 
     final isPublished = assignedItemsToday.any((i) => i.isPublicado);
@@ -673,7 +1082,9 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                       borderRadius: BorderRadius.circular(14),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: isSelected
                               ? const Color(0xFF2563EB)
@@ -687,22 +1098,26 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
-                                color:
-                                    isSelected ? Colors.white : Colors.black87,
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.black87,
                               ),
                             ),
                             Text(
                               '${date.day}/${date.month}',
                               style: TextStyle(
                                 fontSize: 10.5,
-                                color:
-                                    isSelected ? Colors.white70 : Colors.grey,
+                                color: isSelected
+                                    ? Colors.white70
+                                    : Colors.grey,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 1),
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
                               decoration: BoxDecoration(
                                 color: isSelected
                                     ? Colors.white.withValues(alpha: 0.25)
@@ -772,7 +1187,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                       isPublished
                           ? 'Este menú ya es visible y reservable por los empleados.'
                           : 'Selecciona los platos bolivianos con un clic y presiona Publicar.',
-                      style: const TextStyle(fontSize: 11.5, color: Colors.grey),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.grey,
+                      ),
                     ),
                   ],
                 );
@@ -844,19 +1262,22 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                   crossAxisCount: 2,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
-                  childAspectRatio: 1.25,
+                  childAspectRatio: 0.70,
                 ),
                 itemCount: catalogo.length,
                 itemBuilder: (context, index) {
                   final dish = catalogo[index];
-                  final isSelected = assignedItemsToday
-                      .any((item) => item.platoCatalogoId == dish.id);
+                  final isSelected = assignedItemsToday.any(
+                    (item) => item.platoCatalogoId == dish.id,
+                  );
 
                   return InkWell(
                     onTap: () {
                       final dayName =
                           weekdays[_selectedDayIndex]['name'] as String;
-                      ref.read(weeklyMenuProvider.notifier).toggleDish(
+                      ref
+                          .read(weeklyMenuProvider.notifier)
+                          .toggleDish(
                             fecha: currentTargetDate,
                             diaSemana: dayName,
                             plato: dish,
@@ -891,8 +1312,9 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                         boxShadow: [
                           if (isSelected)
                             BoxShadow(
-                              color: const Color(0xFF2563EB)
-                                  .withValues(alpha: 0.15),
+                              color: const Color(
+                                0xFF2563EB,
+                              ).withValues(alpha: 0.15),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -904,17 +1326,20 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                         children: [
                           Row(
                             children: [
-                              CircleAvatar(
-                                radius: 12,
-                                backgroundColor: isSelected
-                                    ? const Color(0xFF2563EB)
-                                    : Colors.grey.shade200,
-                                child: Icon(
-                                  isSelected ? Icons.check : Icons.add,
-                                  size: 14,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.grey.shade700,
+                              Tooltip(
+                                message: isSelected
+                                    ? 'Quitar del menú'
+                                    : 'Agregar al menú',
+                                child: CircleAvatar(
+                                  radius: 15,
+                                  backgroundColor: isSelected
+                                      ? Colors.red.shade600
+                                      : const Color(0xFF2563EB),
+                                  child: Icon(
+                                    isSelected ? Icons.remove : Icons.add,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 4),
@@ -923,10 +1348,13 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                                   alignment: Alignment.centerRight,
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color:
-                                          Colors.amber.withValues(alpha: 0.15),
+                                      color: Colors.amber.withValues(
+                                        alpha: 0.15,
+                                      ),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
@@ -943,6 +1371,14 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
                                 ),
                               ),
                             ],
+                          ),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 120,
+                              child: _buildCatalogDishImage(dish),
+                            ),
                           ),
                           Text(
                             dish.nombre,
@@ -987,6 +1423,32 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen>
           const SizedBox(height: 30),
         ],
       ),
+    );
+  }
+
+  Widget _buildCatalogDishImage(PlatoCatalogo dish) {
+    final imagePath = resolveDatabaseDishImage(
+      dish.imagenUrl,
+      dishName: dish.nombre,
+      dishId: dish.id,
+    );
+    final placeholder = Container(
+      color: Colors.blueGrey.shade50,
+      alignment: Alignment.center,
+      child: Icon(Icons.restaurant, size: 30, color: Colors.blueGrey.shade300),
+    );
+
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return Image.network(
+        imagePath,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => placeholder,
+      );
+    }
+    return Image.asset(
+      imagePath,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => placeholder,
     );
   }
 

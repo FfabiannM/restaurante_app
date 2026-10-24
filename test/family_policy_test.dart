@@ -166,5 +166,13 @@ void main() {
       final canUse = await repo.canUseRestaurantService('demo-user-123', 'fam-1');
       expect(canUse, isTrue);
     });
+
+    test('SupabaseFamilyRepository: No asigna familiares por defecto a un empleado nuevo', () async {
+      final repo = SupabaseFamilyRepository();
+
+      final family = await repo.getFamilyMembers('new-employee-id');
+
+      expect(family, isEmpty);
+    });
   });
 }

@@ -27,8 +27,8 @@ class MembershipFilterNotifier extends Notifier<MembershipFilter> {
 
 final membershipFilterProvider =
     NotifierProvider<MembershipFilterNotifier, MembershipFilter>(
-  MembershipFilterNotifier.new,
-);
+      MembershipFilterNotifier.new,
+    );
 
 class AdminEmployeesState {
   final List<AdminEmployee> employees;
@@ -75,6 +75,7 @@ class AdminEmployeesNotifier extends Notifier<AdminEmployeesState> {
     required String nombres,
     required String apellidos,
     required String email,
+    required String password,
     required String telefono,
     required String departamento,
     required bool hasMonthlyPlan,
@@ -87,17 +88,25 @@ class AdminEmployeesNotifier extends Notifier<AdminEmployeesState> {
         nombres: nombres,
         apellidos: apellidos,
         email: email,
+        password: password,
         telefono: telefono,
         departamento: departamento,
         hasMonthlyPlan: hasMonthlyPlan,
         initialFamiliares: initialFamiliares,
       );
       state = AdminEmployeesState(
-        employees: [newEmp, ...state.employees],
+        employees: [newEmp, ...state.employees.where((e) => e.id != newEmp.id)],
         isLoading: false,
+        error: null,
       );
       return true;
     } catch (e) {
+      final cleanMsg = e.toString().replaceFirst('Exception: ', '');
+      state = AdminEmployeesState(
+        employees: state.employees,
+        isLoading: false,
+        error: cleanMsg,
+      );
       return false;
     }
   }
@@ -111,9 +120,16 @@ class AdminEmployeesNotifier extends Notifier<AdminEmployeesState> {
             .map((e) => e.id == employee.id ? employee : e)
             .toList(),
         isLoading: false,
+        error: null,
       );
       return true;
     } catch (e) {
+      final cleanMsg = e.toString().replaceFirst('Exception: ', '');
+      state = AdminEmployeesState(
+        employees: state.employees,
+        isLoading: false,
+        error: cleanMsg,
+      );
       return false;
     }
   }
@@ -128,6 +144,12 @@ class AdminEmployeesNotifier extends Notifier<AdminEmployeesState> {
       );
       return true;
     } catch (e) {
+      final cleanMsg = e.toString().replaceFirst('Exception: ', '');
+      state = AdminEmployeesState(
+        employees: state.employees,
+        isLoading: false,
+        error: cleanMsg,
+      );
       return false;
     }
   }
@@ -179,6 +201,20 @@ class AdminEmployeesNotifier extends Notifier<AdminEmployeesState> {
     try {
       final repo = ref.read(adminRepositoryProvider);
       await repo.deleteFamiliar(employeeId, familiarId);
+      await loadEmployees();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> updateFamiliarForEmployee({
+    required String employeeId,
+    required Familiar familiar,
+  }) async {
+    try {
+      final repo = ref.read(adminRepositoryProvider);
+      await repo.updateFamiliar(employeeId, familiar);
       await loadEmployees();
       return true;
     } catch (e) {
