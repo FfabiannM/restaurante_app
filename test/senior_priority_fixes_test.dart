@@ -10,10 +10,8 @@ import 'package:restaurante_app/features/auth/presentation/login_screen.dart';
 import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:restaurante_app/features/familiares/data/supabase_family_repository.dart';
 import 'package:restaurante_app/features/menu/domain/bolivian_dish_entity.dart';
-import 'package:restaurante_app/features/menu/presentation/menu_screen.dart';
 import 'package:restaurante_app/features/menu/presentation/providers/weekly_menu_provider.dart';
 import 'package:restaurante_app/features/reservas/data/supabase_reservation_repository.dart';
-import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
 import 'package:restaurante_app/features/reservas/presentation/employee_screen.dart';
 import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
 import 'package:restaurante_app/main.dart';
@@ -57,6 +55,7 @@ void main() {
         nombres: 'Carlos Andrés',
         apellidos: 'Vargas Mercado',
         email: 'carlos.vargas@institucion.gob.bo',
+        password: 'Password123!',
         telefono: '72233445',
         departamento: 'Recursos Humanos',
         hasMonthlyPlan: true,
@@ -83,6 +82,7 @@ void main() {
         nombres: 'Otro',
         apellidos: 'Usuario',
         email: 'otro.usuario@institucion.gob.bo',
+        password: 'Password123!',
         telefono: '71122334',
         departamento: 'Tecnología',
         hasMonthlyPlan: false,
@@ -97,6 +97,7 @@ void main() {
         nombres: 'Otro',
         apellidos: 'Usuario',
         email: 'carlos.vargas@institucion.gob.bo',
+        password: 'Password123!',
         telefono: '71122334',
         departamento: 'Tecnología',
         hasMonthlyPlan: false,

@@ -1197,7 +1197,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                                             'nombres': '',
                                             'apellidos':
                                                 apellidosController.text,
-                                            'ci': '',
+                                            'telefono': '',
                                             'parentesco': 'Hijo',
                                           });
                                         });
@@ -1244,10 +1244,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                                               ],
                                               decoration: InputDecoration(
                                                 labelText:
-                                                    'CI Familiar #${i + 1}',
+                                                    'Telefono Familiar #${i + 1}',
                                                 isDense: true,
                                               ),
-                                              onChanged: (v) => fam['ci'] = v,
+                                              onChanged: (v) =>
+                                                  fam['telefono'] = v,
                                             ),
                                           ),
                                           IconButton(
@@ -1262,6 +1263,53 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                                             },
                                           ),
                                         ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      DropdownButtonFormField<String>(
+                                        initialValue:
+                                            const [
+                                              'Hijo',
+                                              'Hija',
+                                              'Esposo',
+                                              'Esposa',
+                                            ].contains(fam['parentesco'])
+                                            ? fam['parentesco']
+                                            : 'Hijo',
+                                        decoration: InputDecoration(
+                                          labelText:
+                                              'Parentesco Familiar #${i + 1}',
+                                          isDense: true,
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 8,
+                                              ),
+                                        ),
+                                        items: const [
+                                          DropdownMenuItem(
+                                            value: 'Hijo',
+                                            child: Text('Hijo'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'Hija',
+                                            child: Text('Hija'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'Esposo',
+                                            child: Text('Esposo'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'Esposa',
+                                            child: Text('Esposa'),
+                                          ),
+                                        ],
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            setModalState(() {
+                                              fam['parentesco'] = val;
+                                            });
+                                          }
+                                        },
                                       ),
                                     ],
                                   ),
@@ -1311,7 +1359,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                                     leading: const Icon(Icons.person_outline),
                                     title: Text(fam.fullName),
                                     subtitle: Text(
-                                      '${fam.parentesco} • CI: ${fam.ci}',
+                                      fam.telefono.isNotEmpty
+                                          ? '${fam.parentesco} • Tel: ${fam.telefono}'
+                                          : fam.parentesco,
                                     ),
                                     trailing: Wrap(
                                       children: [
@@ -1474,18 +1524,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                                           final fam = initialFamiliares[i];
                                           final famNombre =
                                               (fam['nombres'] ?? '').trim();
-                                          final famCi = (fam['ci'] ?? '')
-                                              .trim();
+                                          final famTelefono =
+                                              (fam['telefono'] ?? '').trim();
                                           if (famNombre.isEmpty ||
-                                              famCi.isEmpty) {
+                                              famTelefono.isEmpty) {
                                             showWarning(
-                                              'El familiar #${i + 1} tiene campos vacíos. Completa nombre y CI.',
+                                              'El familiar #${i + 1} tiene campos vacíos. Completa nombre y telefono.',
                                             );
                                             return;
                                           }
-                                          if (!numericRegex.hasMatch(famCi)) {
+                                          if (!numericRegex.hasMatch(
+                                            famTelefono,
+                                          )) {
                                             showWarning(
-                                              'El CI del familiar #${i + 1} solo permite números.',
+                                              'El telefono del familiar #${i + 1} solo permite números.',
                                             );
                                             return;
                                           }
@@ -1636,7 +1688,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     final apellidosController = TextEditingController(
       text: familiar?.apellidos ?? '',
     );
-    final ciController = TextEditingController(text: familiar?.ci ?? '');
+    final telefonoController = TextEditingController(
+      text: familiar?.telefono ?? '',
+    );
     String parentesco = familiar?.parentesco ?? 'Hijo';
     String? dialogError;
 
@@ -1710,8 +1764,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                 ),
                 const SizedBox(height: 10),
                 TextField(
-                  controller: ciController,
-                  keyboardType: TextInputType.number,
+                  controller: telefonoController,
+                  keyboardType: TextInputType.phone,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   onChanged: (_) {
                     if (dialogError != null) {
@@ -1719,20 +1773,27 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                     }
                   },
                   decoration: const InputDecoration(
-                    labelText: 'Cédula de Identidad (CI)',
+                    labelText: 'Número de Teléfono',
+                    prefixIcon: Icon(Icons.phone_outlined),
                   ),
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  initialValue: parentesco,
+                  initialValue:
+                      const [
+                        'Hijo',
+                        'Hija',
+                        'Esposo',
+                        'Esposa',
+                      ].contains(parentesco)
+                      ? parentesco
+                      : 'Hijo',
                   decoration: const InputDecoration(labelText: 'Parentesco'),
                   items: const [
                     DropdownMenuItem(value: 'Hijo', child: Text('Hijo')),
                     DropdownMenuItem(value: 'Hija', child: Text('Hija')),
-                    DropdownMenuItem(value: 'Cónyuge', child: Text('Cónyuge')),
-                    DropdownMenuItem(value: 'Padre', child: Text('Padre')),
-                    DropdownMenuItem(value: 'Madre', child: Text('Madre')),
-                    DropdownMenuItem(value: 'Hermano', child: Text('Hermano')),
+                    DropdownMenuItem(value: 'Esposo', child: Text('Esposo')),
+                    DropdownMenuItem(value: 'Esposa', child: Text('Esposa')),
                   ],
                   onChanged: (val) {
                     if (val != null) {
@@ -1752,17 +1813,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
               onPressed: () async {
                 final nombres = nombresController.text.trim();
                 final apellidos = apellidosController.text.trim();
-                final ci = ciController.text.trim();
+                final telefono = telefonoController.text.trim();
 
-                if (nombres.isEmpty || apellidos.isEmpty || ci.isEmpty) {
+                if (nombres.isEmpty || apellidos.isEmpty || telefono.isEmpty) {
                   setDialogState(() {
                     dialogError =
-                        'No se permite asociar un familiar con campos vacíos. Completa Nombres, Apellidos y CI.';
+                        'No se permite asociar un familiar con campos vacíos. Completa Nombres, Apellidos y Teléfono.';
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
-                        'No se permite asociar un familiar con campos vacíos. Completa Nombres, Apellidos y CI.',
+                        'No se permite asociar un familiar con campos vacíos. Completa Nombres, Apellidos y Teléfono.',
                       ),
                       backgroundColor: Colors.red,
                     ),
@@ -1770,13 +1831,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                   return;
                 }
 
-                if (!RegExp(r'^[0-9]+$').hasMatch(ci)) {
+                if (!RegExp(r'^[0-9]+$').hasMatch(telefono)) {
                   setDialogState(() {
-                    dialogError = 'El CI del familiar solo permite números.';
+                    dialogError =
+                        'El teléfono del familiar solo permite números.';
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('El CI del familiar solo permite números.'),
+                      content: Text(
+                        'El teléfono del familiar solo permite números.',
+                      ),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -1789,7 +1853,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                     ? await notifier.updateFamiliarForEmployee(
                         employeeId: employeeId,
                         familiar: familiar.copyWith(
-                          ci: ci,
+                          telefono: telefono,
                           nombres: nombres,
                           apellidos: apellidos,
                           parentesco: parentesco,
@@ -1797,7 +1861,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                       )
                     : await notifier.addFamiliarToEmployee(
                         employeeId: employeeId,
-                        ci: ci,
+                        telefono: telefono,
                         nombres: nombres,
                         apellidos: apellidos,
                         parentesco: parentesco,

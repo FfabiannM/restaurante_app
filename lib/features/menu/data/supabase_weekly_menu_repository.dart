@@ -164,7 +164,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Entrada',
       region: 'Nacional',
       precio: 18.0,
-      imagenUrl: '',
+      imagenUrl: 'assets/images/11_tortilla_de_verduras.jpg',
     ),
     const PlatoCatalogo(
       id: 17,
@@ -173,7 +173,7 @@ class SupabaseWeeklyMenuRepository {
       categoria: 'Entrada',
       region: 'Nacional',
       precio: 18.0,
-      imagenUrl: '',
+      imagenUrl: 'assets/images/11_tortilla_de_verduras.jpg',
     ),
   ];
 

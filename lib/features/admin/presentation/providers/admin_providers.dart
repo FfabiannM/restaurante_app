@@ -167,7 +167,8 @@ class AdminEmployeesNotifier extends Notifier<AdminEmployeesState> {
 
   Future<bool> addFamiliarToEmployee({
     required String employeeId,
-    required String ci,
+    String ci = '',
+    String telefono = '',
     required String nombres,
     required String apellidos,
     required String parentesco,
@@ -178,6 +179,7 @@ class AdminEmployeesNotifier extends Notifier<AdminEmployeesState> {
         id: 'fam-$employeeId-${DateTime.now().millisecondsSinceEpoch}',
         empleadoId: employeeId,
         ci: ci,
+        telefono: telefono,
         nombres: nombres,
         apellidos: apellidos,
         parentesco: parentesco,

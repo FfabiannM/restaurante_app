@@ -232,10 +232,10 @@ class SupabaseMenuRepository implements MenuRepository {
       }
 
       // Fallback estructurado en memoria si Supabase no tiene datos
-      return _mockFallback.getDailyMenuStructure(date);
+      return await _mockFallback.getDailyMenuStructure(date);
     } catch (e) {
       debugPrint('⚠️ Error obteniendo estructura de menú en Supabase: $e');
-      return _mockFallback.getDailyMenuStructure(date);
+      return await _mockFallback.getDailyMenuStructure(date);
     }
   }
 

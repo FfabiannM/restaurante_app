@@ -173,34 +173,35 @@ class SupabaseReservationRepository implements ReservationRepository {
     ) async {
       try {
         final monthlyResponse = await client
-            .from('usuarios')
-            .select(
-              'id, nombres, apellidos, email, rol, has_monthly_plan, activo',
-            )
-            .eq('has_monthly_plan', true)
-            .eq('rol', 'EMPLEADO');
+            .from('vista_usuarios')
+            .select()
+            .eq('rol', 'Empleado')
+            .eq('activo', true);
 
         final existingUserIds = reservations.map((r) => r.userId).toSet();
         final monthlyOrders = (monthlyResponse as List<dynamic>)
             .map((row) => Map<String, dynamic>.from(row as Map))
-            .where((user) => !existingUserIds.contains(user['id'].toString()))
+            .where((user) => !existingUserIds.contains((user['id_usuario'] ?? user['id']).toString()))
             .map(
-              (user) => Reservation(
-                id: 'monthly-${user['id']}-$dateStr',
-                userId: user['id'].toString(),
-                userName: '${user['nombres'] ?? ''} ${user['apellidos'] ?? ''}'
-                    .trim(),
-                beneficiaryName:
-                    '${user['nombres'] ?? ''} ${user['apellidos'] ?? ''}'
-                        .trim(),
-                dishName: 'Almuerzo Completo del Día',
-                date: date,
-                type: 'pension',
-                status: 'confirmada',
-                price: 15.0,
-                notes: 'Plan Mensual',
-                createdAt: date,
-              ),
+              (user) {
+                final uid = (user['id_usuario'] ?? user['id'] ?? '').toString();
+                final name = user['nombre_completo']?.toString() ??
+                    '${user['nombre'] ?? user['nombres'] ?? ''} ${user['apellidos'] ?? ''}'
+                        .trim();
+                return Reservation(
+                  id: 'monthly-$uid-$dateStr',
+                  userId: uid,
+                  userName: name,
+                  beneficiaryName: name,
+                  dishName: 'Almuerzo Completo del Día',
+                  date: date,
+                  type: 'pension',
+                  status: 'confirmada',
+                  price: 15.0,
+                  notes: 'Plan Mensual',
+                  createdAt: date,
+                );
+              },
             )
             .toList();
 
@@ -229,7 +230,7 @@ class SupabaseReservationRepository implements ReservationRepository {
         }
         return Reservation.fromJson(map);
       }).toList();
-      return withMonthlyPlanOrders(reservations);
+      return await withMonthlyPlanOrders(reservations);
     } catch (e1) {
       debugPrint(
         'ℹ️ Fallback 1: No se pudo consultar reservations con relaciones ($e1). Probando sin relaciones.',
@@ -248,7 +249,7 @@ class SupabaseReservationRepository implements ReservationRepository {
                   Reservation.fromJson(Map<String, dynamic>.from(item as Map)),
             )
             .toList();
-        return withMonthlyPlanOrders(reservations);
+        return await withMonthlyPlanOrders(reservations);
       } catch (e2) {
         debugPrint(
           'ℹ️ Fallback 2: No se pudo consultar tabla reservations ($e2). Probando tabla reservas.',
@@ -268,7 +269,7 @@ class SupabaseReservationRepository implements ReservationRepository {
                 ),
               )
               .toList();
-          return withMonthlyPlanOrders(reservations);
+          return await withMonthlyPlanOrders(reservations);
         } catch (e3) {
           debugPrint(
             '⚠️ Error al consultar reservas en Supabase ($e3). Retornando datos en memoria.',
