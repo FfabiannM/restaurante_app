@@ -270,13 +270,13 @@ export default function CalendarioGrid({
         </div>
 
         {isAdmin ? (
-          <p className="text-[11px] text-slate-400 italic">
-            * Como administrador, haz clic en cualquier día para ingresar una excepción de no atención.
+          <p className="text-[13px] text-slate-400 italic">
+            * Haga clic en cualquier día para registrar un día sin atención.
           </p>
         ) : (
-          <p className="text-[11px] text-slate-500 flex items-center space-x-1">
+          <p className="text-[13px] text-slate-500 flex items-center space-x-1">
             <Info className="w-3.5 h-3.5 text-blue-600" />
-            <span>En los días de No Atención, el comedor permanecerá cerrado.</span>
+            <span>Los días marcados no se brindará atención.</span>
           </p>
         )}
       </div>

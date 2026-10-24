@@ -166,7 +166,7 @@ export default function UsuarioFamiliarModal({
       isOpen={isOpen}
       onClose={onClose}
       title="Gestión de Familiares"
-      subtitle="Registro y vinculación en la tabla familiar para usuarios con rol Empleado"
+      subtitle="Registro de familiares del usuario"
       icon={Users}
       maxWidth="max-w-2xl"
     >

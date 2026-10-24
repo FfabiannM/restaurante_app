@@ -161,7 +161,7 @@ export default function Login() {
           <div className="mt-6 pt-5 border-t border-slate-200 text-center">
             <div className="inline-flex items-center space-x-1.5 text-xs text-slate-500 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-xs">
               <ShieldCheck className="w-4 h-4 text-blue-600" />
-              <span>Acceso seguro protegido con Supabase Auth</span>
+              <span>Sus datos están seguros.</span>
             </div>
           </div>
         </div>

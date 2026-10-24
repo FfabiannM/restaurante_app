@@ -13,8 +13,7 @@ export const supabaseAnonKey = (
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error(
-    "Error con la conexión a Supabase: Variables no encontradas.\n" +
-    "Asegúrate de configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en tu .env o en Vercel."
+   "Estamos teniendo problemas con la conexión a nuestros servidores."
   );
 }
 

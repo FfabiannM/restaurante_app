@@ -111,7 +111,7 @@ export default function UsuarioCreateModal({
       isOpen={isOpen}
       onClose={handleModalClose}
       title="Agregar Nuevo Usuario"
-      subtitle="Registra una nueva cuenta institucional asignándole un rol"
+      subtitle="Registro de usuarios, por favor complete los datos."
       icon={UserPlus}
       maxWidth="max-w-lg"
     >
