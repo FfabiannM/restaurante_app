@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restaurante_app/features/auth/data/supabase_auth_repository.dart';
 import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
-import 'package:restaurante_app/features/menu/domain/menu_entity.dart';
 import 'package:restaurante_app/features/menu/presentation/menu_screen.dart';
 import 'package:restaurante_app/features/reservas/presentation/employee_screen.dart';
 import 'package:restaurante_app/supabase/menu_service.dart';
@@ -124,8 +123,8 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Botón confirmar
-        final confirmBtn = find.textContaining('Confirmar Reserva').first;
+        // Botón confirmar (ElevatedButton al final del formulario)
+        final confirmBtn = find.byType(ElevatedButton).last;
         await tester.ensureVisible(confirmBtn);
         await tester.tap(confirmBtn);
         await tester.pumpAndSettle();

@@ -91,9 +91,9 @@ class Reservation {
     required this.createdAt,
   });
 
-  bool get isConfirmed => status == 'confirmada';
-  bool get isCancelled => status == 'cancelada';
-  bool get isDelivered => status == 'entregada';
+  bool get isConfirmed => status.toLowerCase() == 'confirmada';
+  bool get isCancelled => status.toLowerCase() == 'cancelada';
+  bool get isDelivered => status.toLowerCase() == 'entregada';
   bool get isForFamiliar => familiarId != null;
 
   String get displayName => beneficiaryName ?? userName;
@@ -166,12 +166,30 @@ class Reservation {
           rawDish,
     );
 
+    final famId = json['id_familiar']?.toString() ?? json['familiar_id']?.toString();
+    String? beneficiaryName = json['beneficiary_name']?.toString();
+    if (beneficiaryName == null && famId != null) {
+      if (json['familiar'] != null && json['familiar'] is Map) {
+        final fam = json['familiar'] as Map;
+        final per = fam['persona'] is Map ? fam['persona'] as Map : null;
+        if (per != null) {
+          final nom = '${per['nombre'] ?? ''} ${per['apellidos'] ?? ''}'.trim();
+          final par = fam['parentesco']?.toString() ?? 'Familiar';
+          beneficiaryName = nom.isNotEmpty ? '$nom ($par)' : 'Familiar ($par)';
+        }
+      } else if (json['nombre'] != null || json['apellidos'] != null) {
+        final nom = '${json['nombre'] ?? ''} ${json['apellidos'] ?? ''}'.trim();
+        final par = json['parentesco']?.toString() ?? 'Familiar';
+        beneficiaryName = nom.isNotEmpty ? '$nom ($par)' : 'Familiar ($par)';
+      }
+    }
+
     return Reservation(
-      id: json['id']?.toString() ?? '',
-      userId: (json['empleado_id'] ?? json['user_id'])?.toString() ?? '',
+      id: json['id_reserva']?.toString() ?? json['id']?.toString() ?? '',
+      userId: (json['id_usuario'] ?? json['empleado_id'] ?? json['user_id'])?.toString() ?? '',
       userName: json['user_name']?.toString() ?? 'Usuario',
-      familiarId: json['familiar_id']?.toString(),
-      beneficiaryName: json['beneficiary_name']?.toString(),
+      familiarId: famId,
+      beneficiaryName: beneficiaryName,
       dishId: json['dish_id']?.toString(),
       dishName: rawDish,
       entradaNombre: entrada,
@@ -188,11 +206,12 @@ class Reservation {
           : json['fecha'] != null
           ? DateTime.parse(json['fecha'] as String)
           : DateTime.now(),
-      type: json['tipo'] ?? json['type'] ?? 'diaria',
+      type: json['tipo'] ?? json['type'] ?? ((json['es_pension'] == true || (json['costo_aplicado'] as num?)?.toDouble() == 15.0) ? 'pension' : 'diaria'),
       status:
           (json['estado'] ?? json['status'])?.toString().toLowerCase() ??
           'confirmada',
       price:
+          (json['costo_aplicado'] as num?)?.toDouble() ??
           (json['precio'] as num?)?.toDouble() ??
           (json['price'] as num?)?.toDouble() ??
           18.0,
@@ -211,8 +230,10 @@ class Reservation {
     return {
       'id': id,
       'user_id': userId,
+      'id_usuario': userId,
       'empleado_id': userId,
       if (familiarId != null) 'familiar_id': familiarId,
+      if (familiarId != null) 'id_familiar': familiarId,
       'beneficiary_name': beneficiaryName ?? userName,
       'dish_id': dishId,
       'dish_name': dishName,
@@ -229,6 +250,9 @@ class Reservation {
       'status': status,
       'precio': price,
       'price': price,
+      'costo_aplicado': price,
+      'es_pension': price <= 15.0,
+      'origen': familiarId != null ? 'FAMILIAR' : 'EMPLEADO',
       'notes': notes,
       'notas': notes,
       'created_at': createdAt.toIso8601String(),

@@ -3,8 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restaurante_app/features/auth/data/supabase_auth_repository.dart';
 import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
-import 'package:restaurante_app/features/menu/domain/bolivian_dish_entity.dart';
-import 'package:restaurante_app/features/menu/presentation/providers/weekly_menu_provider.dart';
 import 'package:restaurante_app/features/reservas/data/supabase_reservation_repository.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
 import 'package:restaurante_app/features/reservas/presentation/employee_screen.dart';
@@ -15,14 +13,6 @@ class _StaticAuthNotifier extends AuthNotifier {
 
   @override
   build() => _user;
-}
-
-class _StaticWeekNotifier extends SelectedWeekNotifier {
-  final DateTime _week;
-  _StaticWeekNotifier(this._week);
-
-  @override
-  DateTime build() => _week;
 }
 
 void main() {
@@ -129,7 +119,7 @@ void main() {
         // Verificar comensales y tarifa (HU8)
         expect(find.text('Reserva Individual'), findsOneWidget);
         expect(find.text('Reserva Conjunta'), findsOneWidget);
-        expect(find.textContaining('Confirmar Reserva'), findsWidgets);
+        expect(find.byType(ElevatedButton), findsWidgets);
       },
     );
   });

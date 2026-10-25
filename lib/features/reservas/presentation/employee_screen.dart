@@ -5,6 +5,8 @@ import 'package:restaurante_app/features/auth/presentation/providers/auth_provid
 import 'package:restaurante_app/features/familiares/domain/familiar_entity.dart';
 import 'package:restaurante_app/features/familiares/presentation/providers/family_providers.dart';
 import 'package:restaurante_app/features/menu/domain/menu_entity.dart';
+import 'package:restaurante_app/features/pension/presentation/pension_screen.dart';
+import 'package:restaurante_app/features/pension/presentation/providers/pension_providers.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
 import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
 import 'package:restaurante_app/supabase/menu_service.dart';
@@ -225,9 +227,46 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
     final familyAsync = ref.watch(employeeFamilyMembersProvider);
     final familyMembers = familyAsync.value ?? [];
 
-    // HU8: Tarifa aplicable (Pensionado Bs. 15.00 vs Regular Bs. 18.00)
-    final hasMonthlyPlan = currentUser?.isPensioner ?? false;
-    final double tariffPrice = hasMonthlyPlan ? 15.0 : 18.0;
+    // HU8 / HU9: Tarifas independientes por comensal consultadas desde Supabase / tabla pension
+    final pensionAsync = ref.watch(
+      comensalesPensionStatusProvider(_selectedDate),
+    );
+    final pensionMap = pensionAsync.value ?? {};
+    final isEmployeePensioned =
+        pensionMap[null] ?? (currentUser?.isPensioner ?? false);
+    final double employeeTariff = isEmployeePensioned ? 15.0 : 18.0;
+
+    final Map<String, double> familiarTariffs = {
+      for (final fam in familyMembers)
+        fam.id: (pensionMap[fam.id] == true ? 15.0 : 18.0),
+    };
+
+    final now = DateTime.now();
+    final todayNormalized = DateTime(now.year, now.month, now.day);
+    final selectedNormalized = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
+    final isPastDate = selectedNormalized.isBefore(todayNormalized);
+
+    final allUserReservations = ref.watch(userReservationsProvider);
+    final activeForSelectedDate = allUserReservations
+        .where(
+          (r) =>
+              AppDateUtils.isSameDay(r.date, _selectedDate) &&
+              r.status.toLowerCase() != 'cancelada',
+        )
+        .toList();
+
+    final employeeActiveRes = activeForSelectedDate
+        .where((r) => !r.isForFamiliar && r.familiarId == null)
+        .firstOrNull;
+
+    final Map<String, Reservation> familiarActiveRes = {
+      for (final r in activeForSelectedDate.where((r) => r.familiarId != null))
+        r.familiarId!: r,
+    };
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -274,7 +313,11 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Banner de Usuario y Modalidad Mensual (HU8: campos listos)
-            _buildUserTariffBanner(currentUser, hasMonthlyPlan, tariffPrice),
+            _buildUserTariffBanner(
+              currentUser,
+              isEmployeePensioned,
+              employeeTariff,
+            ),
 
             const SizedBox(height: 12),
 
@@ -286,6 +329,146 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
             // Selector de Días de la Semana (Lunes a Viernes)
             _buildWeekDaysSelector(),
 
+            // Visual: Alerta si es fecha pasada
+            if (isPastDate)
+              Container(
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.amber.shade300, width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.history_toggle_off,
+                      color: Colors.amber.shade800,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Fecha pasada (${AppDateUtils.formatDate(_selectedDate)})',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.amber.shade900,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Esta fecha ya concluyó. No se permiten reservas para días anteriores.',
+                            style: TextStyle(
+                              color: Colors.amber.shade900,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Visual: Alerta si el comensal actual ya tiene reserva registrada
+            if (!isPastDate &&
+                !_isJointReservation &&
+                _individualFamiliar == null &&
+                employeeActiveRes != null)
+              Container(
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.blue.shade300, width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      color: Colors.blue.shade800,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ya tienes una reserva para esta fecha',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue.shade900,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Plato: ${employeeActiveRes.dishName} · Estado: ${employeeActiveRes.status.toUpperCase()} (Límite: 1 reserva por comensal).',
+                            style: TextStyle(
+                              color: Colors.blue.shade800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            if (!isPastDate &&
+                !_isJointReservation &&
+                _individualFamiliar != null &&
+                familiarActiveRes.containsKey(_individualFamiliar!.id))
+              Container(
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.purple.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.purple.shade300, width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.family_restroom,
+                      color: Colors.purple.shade800,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Reserva existente para ${_individualFamiliar!.displayName}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.purple.shade900,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Plato: ${familiarActiveRes[_individualFamiliar!.id]?.dishName} · Estado: ${familiarActiveRes[_individualFamiliar!.id]?.status.toUpperCase()} (Límite: 1 reserva por comensal).',
+                            style: TextStyle(
+                              color: Colors.purple.shade800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             const SizedBox(height: 14),
 
             // Sección de Platos Reales del Día
@@ -294,7 +477,14 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
             const SizedBox(height: 14),
 
             // Configuración de Reserva: Comensales (HU7 y HU9)
-            _buildBeneficiarySection(currentUser, familyMembers, tariffPrice),
+            _buildBeneficiarySection(
+              currentUser,
+              familyMembers,
+              employeeTariff,
+              familiarTariffs,
+              employeeActiveRes,
+              familiarActiveRes,
+            ),
 
             const SizedBox(height: 14),
 
@@ -304,12 +494,25 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
             const SizedBox(height: 14),
 
             // Resumen de Costo en tiempo real
-            _buildCostSummary(tariffPrice, familyMembers),
+            _buildCostSummary(
+              employeeTariff,
+              familiarTariffs,
+              familyMembers,
+              employeeActiveRes,
+              familiarActiveRes,
+            ),
 
             const SizedBox(height: 16),
 
             // Botón Confirmar Reserva
-            _buildConfirmButton(tariffPrice, familyMembers),
+            _buildConfirmButton(
+              employeeTariff: employeeTariff,
+              familiarTariffs: familiarTariffs,
+              familyMembers: familyMembers,
+              isPastDate: isPastDate,
+              employeeActiveRes: employeeActiveRes,
+              familiarActiveRes: familiarActiveRes,
+            ),
 
             const SizedBox(height: 24),
           ],
@@ -324,91 +527,102 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
     bool hasMonthlyPlan,
     double tariffPrice,
   ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: hasMonthlyPlan
-                ? Colors.green.withValues(alpha: 0.15)
-                : Colors.blue.withValues(alpha: 0.15),
-            child: Icon(
-              hasMonthlyPlan
-                  ? Icons.stars_rounded
-                  : Icons.account_circle_outlined,
-              color: hasMonthlyPlan ? Colors.green : const Color(0xFF2563EB),
-              size: 26,
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PensionScreen()),
+        ).then((_) {
+          ref.invalidate(comensalesPensionStatusProvider(_selectedDate));
+        });
+      },
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Hola, ${currentUser?.fullName ?? 'Empleado'}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: Color(0xFF1E293B),
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: hasMonthlyPlan
+                  ? Colors.green.withValues(alpha: 0.15)
+                  : Colors.blue.withValues(alpha: 0.15),
+              child: Icon(
+                hasMonthlyPlan
+                    ? Icons.stars_rounded
+                    : Icons.account_circle_outlined,
+                color: hasMonthlyPlan ? Colors.green : const Color(0xFF2563EB),
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hola, ${currentUser?.fullName ?? 'Empleado'}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Color(0xFF1E293B),
+                    ),
                   ),
-                ),
-                Text(
-                  hasMonthlyPlan
-                      ? '⭐ Modalidad: Pensionado Activo'
-                      : 'Modalidad: Regular (HU8: Campos listos para reducción mensual)',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: hasMonthlyPlan
-                        ? Colors.green.shade800
-                        : const Color(0xFF2563EB),
+                  Text(
+                    hasMonthlyPlan
+                        ? '⭐ Modalidad: Pensionado Activo · Toca para gestionar'
+                        : 'Modalidad: Regular (Bs. 18/plato) · Toca para pensionar',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: hasMonthlyPlan
+                          ? Colors.green.shade800
+                          : const Color(0xFF2563EB),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: hasMonthlyPlan
-                  ? Colors.green.withValues(alpha: 0.12)
-                  : Colors.blue.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  'Bs. ${tariffPrice.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: hasMonthlyPlan
-                        ? Colors.green.shade800
-                        : const Color(0xFF2563EB),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: hasMonthlyPlan
+                    ? Colors.green.withValues(alpha: 0.12)
+                    : Colors.blue.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Bs. ${tariffPrice.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: hasMonthlyPlan
+                          ? Colors.green.shade800
+                          : const Color(0xFF2563EB),
+                    ),
                   ),
-                ),
-                const Text(
-                  'por plato',
-                  style: TextStyle(fontSize: 10, color: Colors.grey),
-                ),
-              ],
+                  const Text(
+                    'por plato',
+                    style: TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -536,7 +750,9 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
   /// Selector horizontal de días hábiles de la semana
   Widget _buildWeekDaysSelector() {
     final dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
-    final todayStr = MenuService.formatDate(DateTime.now());
+    final now = DateTime.now();
+    final todayNormalized = DateTime(now.year, now.month, now.day);
+    final todayStr = MenuService.formatDate(now);
     final selectedStr = MenuService.formatDate(_selectedDate);
 
     return SingleChildScrollView(
@@ -549,6 +765,8 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
           final isSelected = dateStr == selectedStr;
           final isToday = dateStr == todayStr;
           final isExcepcion = _excepcionesFechas.contains(dateStr);
+          final dayNormalized = DateTime(date.year, date.month, date.day);
+          final isPast = dayNormalized.isBefore(todayNormalized);
 
           return Padding(
             padding: const EdgeInsets.only(right: 8.0),
@@ -563,19 +781,27 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                 ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? const Color(0xFF2563EB)
-                      : Colors.white.withValues(alpha: 0.95),
+                      ? (isPast
+                            ? const Color(0xFF475569)
+                            : const Color(0xFF2563EB))
+                      : (isPast
+                            ? Colors.grey.shade100
+                            : Colors.white.withValues(alpha: 0.95)),
                   borderRadius: BorderRadius.circular(16),
                   border: isToday && !isSelected
                       ? Border.all(color: const Color(0xFF2563EB), width: 1.5)
-                      : null,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                      : (isPast && !isSelected
+                            ? Border.all(color: Colors.grey.shade300)
+                            : null),
+                  boxShadow: isPast
+                      ? []
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -588,7 +814,11 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? Colors.white : Colors.black87,
+                            color: isSelected
+                                ? Colors.white
+                                : (isPast
+                                      ? Colors.grey.shade600
+                                      : Colors.black87),
                           ),
                         ),
                         if (isExcepcion) ...[
@@ -598,6 +828,15 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                             size: 12,
                             color: isSelected ? Colors.white : Colors.red,
                           ),
+                        ] else if (isPast) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.history,
+                            size: 12,
+                            color: isSelected
+                                ? Colors.white70
+                                : Colors.grey.shade500,
+                          ),
                         ],
                       ],
                     ),
@@ -606,7 +845,9 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                       '${date.day}/${date.month}',
                       style: TextStyle(
                         fontSize: 11,
-                        color: isSelected ? Colors.white70 : Colors.grey,
+                        color: isSelected
+                            ? Colors.white70
+                            : (isPast ? Colors.grey.shade500 : Colors.grey),
                       ),
                     ),
                     if (isToday)
@@ -618,6 +859,17 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                           color: isSelected
                               ? Colors.white
                               : const Color(0xFF2563EB),
+                        ),
+                      )
+                    else if (isPast)
+                      Text(
+                        '• Pasado',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white70
+                              : Colors.grey.shade600,
                         ),
                       ),
                   ],
@@ -962,7 +1214,10 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
   Widget _buildBeneficiarySection(
     dynamic currentUser,
     List<Familiar> familyMembers,
-    double tariffPrice,
+    double employeeTariff,
+    Map<String, double> familiarTariffs,
+    Reservation? employeeActiveRes,
+    Map<String, Reservation> familiarActiveRes,
   ) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1043,17 +1298,30 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                 DropdownMenuItem<Familiar?>(
                   value: null,
                   child: Text(
-                    'Para mí (Empleado: ${currentUser?.fullName ?? 'Usuario'})',
-                    style: const TextStyle(
+                    employeeActiveRes != null
+                        ? 'Para mí (Ya reservado)'
+                        : 'Para mí (Empleado: ${currentUser?.fullName ?? 'Usuario'}) · Bs. ${employeeTariff.toStringAsFixed(0)}',
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
+                      color: employeeActiveRes != null ? Colors.blueGrey : null,
                     ),
                   ),
                 ),
                 ...familyMembers.map((f) {
+                  final fPrice = familiarTariffs[f.id] ?? 18.0;
+                  final famRes = familiarActiveRes[f.id];
                   return DropdownMenuItem<Familiar?>(
                     value: f,
-                    child: Text('Familiar: ${f.displayName}', style: const TextStyle(fontSize: 13)),
+                    child: Text(
+                      famRes != null
+                          ? 'Familiar: ${f.displayName} (Ya reservado)'
+                          : 'Familiar: ${f.displayName} · Bs. ${fPrice.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: famRes != null ? Colors.blueGrey : null,
+                      ),
+                    ),
                   );
                 }),
               ],
@@ -1064,7 +1332,7 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
           ] else ...[
             // MODO CONJUNTO: Empleado + Familiares seleccionados
             const Text(
-              'Marcar comensales para esta fecha:',
+              'Marcar comensales para esta fecha (Límite: 1 por comensal):',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
             ),
             Material(
@@ -1072,21 +1340,35 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
               child: CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(
-                  'Empleado: ${currentUser?.fullName ?? 'Usuario'}',
-                  style: const TextStyle(
+                  employeeActiveRes != null
+                      ? 'Empleado: ${currentUser?.fullName ?? 'Usuario'} (Ya reservado)'
+                      : 'Empleado: ${currentUser?.fullName ?? 'Usuario'}',
+                  style: TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.bold,
+                    color: employeeActiveRes != null
+                        ? Colors.grey.shade600
+                        : null,
                   ),
                 ),
                 subtitle: Text(
-                  'Tarifa: Bs. ${tariffPrice.toStringAsFixed(2)}',
-                  style: const TextStyle(fontSize: 11.5, color: Colors.grey),
+                  employeeActiveRes != null
+                      ? 'Ya cuenta con una reserva activa (${employeeActiveRes.dishName})'
+                      : 'Tarifa: Bs. ${employeeTariff.toStringAsFixed(2)} ${employeeTariff == 15.0 ? "(Pensionado)" : "(Regular)"}',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: employeeActiveRes != null
+                        ? Colors.blue.shade700
+                        : Colors.grey,
+                  ),
                 ),
-                value: _includeEmployee,
+                value: employeeActiveRes != null ? false : _includeEmployee,
                 activeColor: const Color(0xFF2563EB),
-                onChanged: (val) {
-                  setState(() => _includeEmployee = val ?? false);
-                },
+                onChanged: employeeActiveRes != null
+                    ? null
+                    : (val) {
+                        setState(() => _includeEmployee = val ?? false);
+                      },
               ),
             ),
             if (familyMembers.isEmpty)
@@ -1099,30 +1381,47 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
               )
             else
               ...familyMembers.map((fam) {
-                final isChecked = _selectedFamiliarIds.contains(fam.id);
+                final famRes = familiarActiveRes[fam.id];
+                final isChecked =
+                    famRes == null && _selectedFamiliarIds.contains(fam.id);
+                final fPrice = familiarTariffs[fam.id] ?? 18.0;
                 return Material(
                   color: Colors.transparent,
                   child: CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(
-                      'Familiar: ${fam.displayName}',
-                      style: const TextStyle(fontSize: 13),
+                      famRes != null
+                          ? 'Familiar: ${fam.displayName} (Ya reservado)'
+                          : 'Familiar: ${fam.displayName}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: famRes != null ? Colors.grey.shade600 : null,
+                      ),
                     ),
                     subtitle: Text(
-                      'Tarifa: Bs. ${tariffPrice.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      famRes != null
+                          ? 'Ya cuenta con una reserva activa (${famRes.dishName})'
+                          : 'Tarifa: Bs. ${fPrice.toStringAsFixed(2)} ${fPrice == 15.0 ? "(Pensionado)" : "(Regular)"}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: famRes != null
+                            ? Colors.purple.shade700
+                            : Colors.grey,
+                      ),
                     ),
                     value: isChecked,
                     activeColor: const Color(0xFF2563EB),
-                    onChanged: (val) {
-                      setState(() {
-                        if (val == true) {
-                          _selectedFamiliarIds.add(fam.id);
-                        } else {
-                          _selectedFamiliarIds.remove(fam.id);
-                        }
-                      });
-                    },
+                    onChanged: famRes != null
+                        ? null
+                        : (val) {
+                            setState(() {
+                              if (val == true) {
+                                _selectedFamiliarIds.add(fam.id);
+                              } else {
+                                _selectedFamiliarIds.remove(fam.id);
+                              }
+                            });
+                          },
                   ),
                 );
               }),
@@ -1174,12 +1473,39 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
     );
   }
 
-  /// Desglose y cálculo de costo en tiempo real
-  Widget _buildCostSummary(double tariffPrice, List<Familiar> familyMembers) {
-    final count = _isJointReservation
-        ? (_includeEmployee ? 1 : 0) + _selectedFamiliarIds.length
-        : 1;
-    final totalCost = count * tariffPrice;
+  /// Desglose y cálculo de costo en tiempo real con tarifas independientes
+  Widget _buildCostSummary(
+    double employeeTariff,
+    Map<String, double> familiarTariffs,
+    List<Familiar> familyMembers,
+    Reservation? employeeActiveRes,
+    Map<String, Reservation> familiarActiveRes,
+  ) {
+    double totalCost = 0.0;
+    int count = 0;
+    if (_isJointReservation) {
+      if (_includeEmployee && employeeActiveRes == null) {
+        totalCost += employeeTariff;
+        count++;
+      }
+      for (final id in _selectedFamiliarIds) {
+        if (!familiarActiveRes.containsKey(id)) {
+          totalCost += (familiarTariffs[id] ?? 18.0);
+          count++;
+        }
+      }
+    } else {
+      final isForFam = _individualFamiliar != null;
+      final bool alreadyReserved = isForFam
+          ? familiarActiveRes.containsKey(_individualFamiliar!.id)
+          : (employeeActiveRes != null);
+      if (!alreadyReserved) {
+        count = 1;
+        totalCost = isForFam
+            ? (familiarTariffs[_individualFamiliar!.id] ?? 18.0)
+            : employeeTariff;
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1212,10 +1538,11 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              Text(
-                'Bs. ${tariffPrice.toStringAsFixed(2)} c/u',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
+              if (!_isJointReservation)
+                Text(
+                  'Tarifa: Bs. ${totalCost.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
             ],
           ),
           const SizedBox(height: 4),
@@ -1241,20 +1568,68 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
     );
   }
 
-  /// Botón Confirmar Reserva con validaciones HU7, HU8, HU9
-  Widget _buildConfirmButton(
-    double tariffPrice,
-    List<Familiar> familyMembers,
-  ) {
+  /// Botón Confirmar Reserva con validaciones HU7, HU8, HU9 y restricción de fechas pasadas / duplicadas
+  Widget _buildConfirmButton({
+    required double employeeTariff,
+    required Map<String, double> familiarTariffs,
+    required List<Familiar> familyMembers,
+    required bool isPastDate,
+    required Reservation? employeeActiveRes,
+    required Map<String, Reservation> familiarActiveRes,
+  }) {
+    bool alreadyReservedSelected = false;
+    String disabledReason = '';
+
+    final now = DateTime.now();
+    final isToday = AppDateUtils.isSameDay(_selectedDate, now);
+    final isAfterCutoff =
+        isToday && (now.hour > 9 || (now.hour == 9 && now.minute > 0));
+
+    if (isPastDate) {
+      disabledReason = 'Fecha pasada (Reservas cerradas)';
+    } else if (isAfterCutoff) {
+      disabledReason = 'Fuera de horario';
+    } else if (!_isJointReservation) {
+      if (_individualFamiliar == null && employeeActiveRes != null) {
+        alreadyReservedSelected = true;
+        disabledReason = 'Ya tienes una reserva para hoy';
+      } else if (_individualFamiliar != null &&
+          familiarActiveRes.containsKey(_individualFamiliar!.id)) {
+        alreadyReservedSelected = true;
+        disabledReason = 'Ya reservado para ${_individualFamiliar!.nombres}';
+      }
+    } else {
+      final bool empHas = _includeEmployee && employeeActiveRes != null;
+      final bool allFamsHave =
+          _selectedFamiliarIds.isNotEmpty &&
+          _selectedFamiliarIds.every((id) => familiarActiveRes.containsKey(id));
+      if (empHas && allFamsHave) {
+        alreadyReservedSelected = true;
+        disabledReason = 'Comensales ya cuentan con reserva';
+      }
+    }
+
+    final bool isActionRestricted =
+        isPastDate || isAfterCutoff || alreadyReservedSelected;
+
     return SizedBox(
       width: double.infinity,
       height: 52,
       child: ElevatedButton.icon(
         onPressed: _isSubmitting
             ? null
-            : () => _handleConfirmReservation(tariffPrice, familyMembers),
+            : () => _handleConfirmReservation(
+                employeeTariff,
+                familiarTariffs,
+                familyMembers,
+                isPastDate: isPastDate,
+                employeeActiveRes: employeeActiveRes,
+                familiarActiveRes: familiarActiveRes,
+              ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF2563EB),
+          backgroundColor: isActionRestricted
+              ? Colors.grey.shade400
+              : const Color(0xFF2563EB),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -1269,11 +1644,19 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                   strokeWidth: 2,
                 ),
               )
-            : const Icon(Icons.check_circle_outline),
+            : Icon(
+                isPastDate
+                    ? Icons.history_toggle_off
+                    : (alreadyReservedSelected
+                          ? Icons.check_circle
+                          : Icons.check_circle_outline),
+              ),
         label: Text(
           _isSubmitting
               ? 'Registrando reserva...'
-              : 'Confirmar Reserva (${AppDateUtils.formatShortDate(_selectedDate)})',
+              : (disabledReason.isNotEmpty
+                    ? '($disabledReason)'
+                    : 'Confirmar Reserva (${AppDateUtils.formatShortDate(_selectedDate)})'),
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
         ),
       ),
@@ -1282,10 +1665,31 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
 
   /// Procesa la confirmación con todas las reglas de aceptación HU7, HU8, HU9
   Future<void> _handleConfirmReservation(
-    double tariffPrice,
-    List<Familiar> familyMembers,
-  ) async {
+    double employeeTariff,
+    Map<String, double> familiarTariffs,
+    List<Familiar> familyMembers, {
+    required bool isPastDate,
+    required Reservation? employeeActiveRes,
+    required Map<String, Reservation> familiarActiveRes,
+  }) async {
     final now = DateTime.now();
+
+    // 0. Bloqueo de fechas pasadas
+    final todayNormalized = DateTime(now.year, now.month, now.day);
+    final selectedNormalized = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
+    if (selectedNormalized.isBefore(todayNormalized) || isPastDate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se puede reservar para fechas pasadas'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     // 1. HU7: "Dado que el empleado no selecciona ningún plato,
     //    Cuando presiona Confirmar, Entonces el sistema muestra 'Debe seleccionar un plato'."
@@ -1327,6 +1731,48 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
       return;
     }
 
+    // 4. Bloqueo de reservas duplicadas (máximo 1 por persona/familiar por día)
+    if (!_isJointReservation) {
+      if (_individualFamiliar == null && employeeActiveRes != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ya tienes una reserva registrada para este día.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      if (_individualFamiliar != null &&
+          familiarActiveRes.containsKey(_individualFamiliar!.id)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Ya existe una reserva registrada para ${_individualFamiliar!.displayName} en este día.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    } else {
+      final validFams = _selectedFamiliarIds
+          .where((id) => !familiarActiveRes.containsKey(id))
+          .toList();
+      final canIncludeEmp = _includeEmployee && employeeActiveRes == null;
+
+      if (!canIncludeEmp && validFams.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Todos los comensales seleccionados ya cuentan con una reserva para este día.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
     if (_isJointReservation &&
         !_includeEmployee &&
         _selectedFamiliarIds.isEmpty) {
@@ -1353,6 +1799,19 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
           for (final f in familyMembers) f.id: f.displayName,
         };
 
+        // Filtrar familiares elegibles (sin reserva previa en este día)
+        final eligibleFamiliarIds = _selectedFamiliarIds
+            .where((id) => !familiarActiveRes.containsKey(id))
+            .toList();
+        final canIncludeEmployee =
+            _includeEmployee && employeeActiveRes == null;
+
+        double jointTotal = 0.0;
+        if (canIncludeEmployee) jointTotal += employeeTariff;
+        for (final id in eligibleFamiliarIds) {
+          jointTotal += (familiarTariffs[id] ?? 18.0);
+        }
+
         final createdCount = await ref
             .read(userReservationsProvider.notifier)
             .createJointReservations(
@@ -1361,21 +1820,21 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
               platoPrincipal: dishName,
               isAlmuerzoCompleto: false,
               menuCategory: ReservationMenuCategory.almuerzoCompleto,
-              reserveForEmployee: _includeEmployee,
-              selectedFamiliarIds: _selectedFamiliarIds.toList(),
+              reserveForEmployee: canIncludeEmployee,
+              selectedFamiliarIds: eligibleFamiliarIds,
               familiarNames: famNames,
-              pricePerPerson: tariffPrice,
+              pricePerPerson: employeeTariff,
+              individualPrices: {null: employeeTariff, ...familiarTariffs},
               notes: notes.isNotEmpty ? notes : null,
               userName: userName,
               userId: userId,
             );
 
         if (mounted) {
-          final total = createdCount * tariffPrice;
           _showReservationConfirmation(
             title: 'Reserva confirmada',
             detail:
-                '$createdCount comensales · $dishName\nTotal: Bs. ${total.toStringAsFixed(2)}',
+                '$createdCount comensales · $dishName\nTotal: Bs. ${jointTotal.toStringAsFixed(2)}',
           );
           _notesController.clear();
         }
@@ -1385,6 +1844,9 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
         final beneficiary = isForFam
             ? _individualFamiliar!.displayName
             : userName;
+        final singlePrice = isForFam
+            ? (familiarTariffs[_individualFamiliar!.id] ?? 18.0)
+            : employeeTariff;
 
         final success = await ref
             .read(userReservationsProvider.notifier)
@@ -1397,7 +1859,7 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
               menuCategory: ReservationMenuCategory.almuerzoCompleto,
               familiarId: _individualFamiliar?.id,
               beneficiaryName: beneficiary,
-              price: tariffPrice,
+              price: singlePrice,
               notes: notes.isNotEmpty ? notes : null,
               userName: userName,
               userId: userId,
@@ -1407,7 +1869,7 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
           _showReservationConfirmation(
             title: 'Reserva confirmada',
             detail:
-                '$beneficiary · $dishName\nTotal: Bs. ${tariffPrice.toStringAsFixed(2)}',
+                '$beneficiary · $dishName\nTotal: Bs. ${singlePrice.toStringAsFixed(2)}',
           );
           _notesController.clear();
         }

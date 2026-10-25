@@ -7,6 +7,7 @@ import 'package:restaurante_app/features/familiares/presentation/providers/famil
 import 'package:restaurante_app/features/menu/data/supabase_menu_repository.dart';
 import 'package:restaurante_app/features/menu/domain/menu_entity.dart';
 import 'package:restaurante_app/features/menu/domain/menu_repository.dart';
+import 'package:restaurante_app/features/pension/presentation/providers/pension_providers.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
 import 'package:restaurante_app/features/reservas/domain/usecases/reservation_policy.dart';
 import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
@@ -462,6 +463,17 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           final isSelected = dateStr == selectedStr;
           final isToday = dateStr == todayStr;
           final isExcepcion = _excepcionesFechas.contains(dateStr);
+          final dayNormalized = DateTime(
+            dayDate.year,
+            dayDate.month,
+            dayDate.day,
+          );
+          final todayNormalized = DateTime(
+            DateTime.now().year,
+            DateTime.now().month,
+            DateTime.now().day,
+          );
+          final isPast = dayNormalized.isBefore(todayNormalized);
 
           return InkWell(
             onTap: () => _loadMenuForDate(dayDate),
@@ -471,19 +483,25 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? Theme.of(context).colorScheme.primary
+                    ? (isPast
+                          ? const Color(0xFF475569)
+                          : Theme.of(context).colorScheme.primary)
                     : (isToday
                           ? Theme.of(
                               context,
                             ).colorScheme.primary.withValues(alpha: 0.12)
-                          : Colors.transparent),
+                          : (isPast
+                                ? Colors.grey.shade100
+                                : Colors.transparent)),
                 borderRadius: BorderRadius.circular(14),
                 border: isToday && !isSelected
                     ? Border.all(
                         color: Theme.of(context).colorScheme.primary,
                         width: 1.5,
                       )
-                    : null,
+                    : (isPast && !isSelected
+                          ? Border.all(color: Colors.grey.shade300)
+                          : null),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -502,7 +520,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                               ? Colors.white
                               : (isExcepcion
                                     ? Colors.red.shade700
-                                    : const Color(0xFF64748B)),
+                                    : (isPast
+                                          ? Colors.grey.shade600
+                                          : const Color(0xFF64748B))),
                         ),
                       ),
                       if (isExcepcion) ...[
@@ -511,6 +531,15 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                           Icons.block,
                           size: 11,
                           color: isSelected ? Colors.white : Colors.red,
+                        ),
+                      ] else if (isPast) ...[
+                        const SizedBox(width: 3),
+                        Icon(
+                          Icons.history,
+                          size: 11,
+                          color: isSelected
+                              ? Colors.white70
+                              : Colors.grey.shade500,
                         ),
                       ],
                     ],
@@ -525,7 +554,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                           ? Colors.white
                           : (isExcepcion
                                 ? Colors.red.shade700
-                                : const Color(0xFF1E293B)),
+                                : (isPast
+                                      ? Colors.grey.shade500
+                                      : const Color(0xFF1E293B))),
                     ),
                   ),
                   if (isToday)
@@ -537,6 +568,17 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                         color: isSelected
                             ? Colors.white70
                             : Theme.of(context).colorScheme.primary,
+                      ),
+                    )
+                  else if (isPast)
+                    Text(
+                      'Pasado',
+                      style: TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? Colors.white70
+                            : Colors.grey.shade500,
                       ),
                     ),
                 ],
@@ -732,9 +774,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 cat,
                 style: TextStyle(
                   color: isSelected ? Colors.white : Colors.black87,
-                  fontWeight: isSelected
-                      ? FontWeight.bold
-                      : FontWeight.normal,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
               selected: isSelected,
@@ -770,11 +810,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           child: const Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.restaurant_outlined,
-                size: 48,
-                color: Colors.grey,
-              ),
+              Icon(Icons.restaurant_outlined, size: 48, color: Colors.grey),
               SizedBox(height: 12),
               Text(
                 'No se encontraron platos para este filtro.',
@@ -948,6 +984,27 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             ),
             child: InkWell(
               onTap: () {
+                final now = DateTime.now();
+                final todayNormalized = DateTime(now.year, now.month, now.day);
+                final selectedNormalized = DateTime(
+                  _selectedDate.year,
+                  _selectedDate.month,
+                  _selectedDate.day,
+                );
+                final isPast = selectedNormalized.isBefore(todayNormalized);
+
+                if (isPast) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'No se puede reservar para una fecha pasada',
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
                 if (widget.onSelectDishForReservation != null) {
                   widget.onSelectDishForReservation!(dish);
                 } else {
@@ -958,30 +1015,55 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 bottomLeft: Radius.circular(24),
                 bottomRight: Radius.circular(24),
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.calendar_today,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
+              child: Builder(
+                builder: (context) {
+                  final now = DateTime.now();
+                  final todayNormalized = DateTime(
+                    now.year,
+                    now.month,
+                    now.day,
+                  );
+                  final selectedNormalized = DateTime(
+                    _selectedDate.year,
+                    _selectedDate.month,
+                    _selectedDate.day,
+                  );
+                  final isPast = selectedNormalized.isBefore(todayNormalized);
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Reservar este plato',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          isPast
+                              ? Icons.history_toggle_off
+                              : Icons.calendar_today,
+                          size: 16,
+                          color: isPast
+                              ? Colors.grey
+                              : Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          isPast
+                              ? 'Fecha pasada (Reservas cerradas)'
+                              : 'Reservar este plato',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isPast
+                                ? Colors.grey
+                                : Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ),
@@ -1194,11 +1276,60 @@ class _ReservationModalContentState
       return;
     }
 
+    final todayNormalized = DateTime(now.year, now.month, now.day);
+    final targetNormalized = DateTime(
+      widget.date.year,
+      widget.date.month,
+      widget.date.day,
+    );
+    if (targetNormalized.isBefore(todayNormalized)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se puede reservar para una fecha pasada'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final allReservations = ref.read(userReservationsProvider);
+    final targetFamiliarId = _isForFamiliar ? _selectedFamiliar?.id : null;
+    final alreadyHasRes = allReservations.any(
+      (r) =>
+          AppDateUtils.isSameDay(r.date, widget.date) &&
+          r.status.toLowerCase() != 'cancelada' &&
+          (targetFamiliarId != null
+              ? r.familiarId == targetFamiliarId
+              : (!r.isForFamiliar && r.familiarId == null)),
+    );
+
+    if (alreadyHasRes) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isForFamiliar
+                ? 'Ya existe una reserva registrada para ${_selectedFamiliar?.displayName ?? "el familiar"} en esta fecha.'
+                : 'Ya tienes una reserva registrada para esta fecha.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     final currentUser = ref.read(authProvider);
-    final hasMonthlyPlan = currentUser?.isPensioner ?? false;
-    final tariffPrice = hasMonthlyPlan ? 15.0 : 18.0;
+    final pensionMap =
+        ref.read(comensalesPensionStatusProvider(widget.date)).value ?? {};
+    final isEmployeePensioned =
+        pensionMap[null] ?? (currentUser?.isPensioner ?? false);
+    final isFamiliarPensioned = _selectedFamiliar != null
+        ? (pensionMap[_selectedFamiliar!.id] ?? false)
+        : false;
+    final tariffPrice = _isForFamiliar
+        ? (isFamiliarPensioned ? 15.0 : 18.0)
+        : (isEmployeePensioned ? 15.0 : 18.0);
 
     final beneficiary = _isForFamiliar
         ? _selectedFamiliar!.displayName
@@ -1230,7 +1361,7 @@ class _ReservationModalContentState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Reserva confirmada para $beneficiary: ${widget.dish.name}',
+              'Reserva confirmada para $beneficiary: ${widget.dish.name} (Bs. ${tariffPrice.toStringAsFixed(2)})',
             ),
             backgroundColor: Colors.green,
           ),
@@ -1252,8 +1383,44 @@ class _ReservationModalContentState
     final familyAsync = ref.watch(employeeFamilyMembersProvider);
     final familiares = familyAsync.value ?? [];
 
-    final hasMonthlyPlan = currentUser?.isPensioner ?? false;
-    final tariffPrice = hasMonthlyPlan ? 15.0 : 18.0;
+    final pensionAsync = ref.watch(
+      comensalesPensionStatusProvider(widget.date),
+    );
+    final pensionMap = pensionAsync.value ?? {};
+    final isEmployeePensioned =
+        pensionMap[null] ?? (currentUser?.isPensioner ?? false);
+    final isFamiliarPensioned = _selectedFamiliar != null
+        ? (pensionMap[_selectedFamiliar!.id] ?? false)
+        : false;
+    final isTargetPensioned = _isForFamiliar
+        ? isFamiliarPensioned
+        : isEmployeePensioned;
+    final tariffPrice = isTargetPensioned ? 15.0 : 18.0;
+
+    final now = DateTime.now();
+    final todayNormalized = DateTime(now.year, now.month, now.day);
+    final targetNormalized = DateTime(
+      widget.date.year,
+      widget.date.month,
+      widget.date.day,
+    );
+    final isPast = targetNormalized.isBefore(todayNormalized);
+    final isAfterCutoff = AppDateUtils.isSameDay(widget.date, now) &&
+        (now.hour > 9 || (now.hour == 9 && now.minute > 0));
+
+    final allReservations = ref.watch(userReservationsProvider);
+    final targetFamiliarId = _isForFamiliar ? _selectedFamiliar?.id : null;
+    final existingReservation = allReservations
+        .where(
+          (r) =>
+              AppDateUtils.isSameDay(r.date, widget.date) &&
+              r.status.toLowerCase() != 'cancelada' &&
+              (targetFamiliarId != null
+                  ? r.familiarId == targetFamiliarId
+                  : (!r.isForFamiliar && r.familiarId == null)),
+        )
+        .firstOrNull;
+    final alreadyReserved = existingReservation != null;
 
     return Container(
       decoration: const BoxDecoration(
@@ -1316,6 +1483,65 @@ class _ReservationModalContentState
                 ),
               ],
             ),
+            if (isPast) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.history, color: Colors.grey.shade600, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Esta fecha ya pasó. No se permiten nuevas reservas para días anteriores.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (alreadyReserved) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.amber.shade800,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _isForFamiliar
+                            ? 'Este familiar ya cuenta con una reserva activa para este día.'
+                            : 'Ya tienes una reserva activa para este día. Solo se permite 1 plato por día.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.amber.shade900,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
 
             // Resumen del plato
@@ -1461,16 +1687,16 @@ class _ReservationModalContentState
 
             const SizedBox(height: 14),
 
-            // HU8: Campos listos para modalidad mensual y tarifa institucional
+            // HU8: Campos listos para modalidad mensual y tarifa institucional independiente
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: hasMonthlyPlan
+                color: isTargetPensioned
                     ? Colors.green.shade50
                     : Colors.blue.shade50,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: hasMonthlyPlan
+                  color: isTargetPensioned
                       ? Colors.green.shade200
                       : Colors.blue.shade200,
                 ),
@@ -1478,10 +1704,10 @@ class _ReservationModalContentState
               child: Row(
                 children: [
                   Icon(
-                    hasMonthlyPlan
+                    isTargetPensioned
                         ? Icons.stars_rounded
                         : Icons.info_outline_rounded,
-                    color: hasMonthlyPlan
+                    color: isTargetPensioned
                         ? Colors.green.shade700
                         : Colors.blue.shade700,
                   ),
@@ -1491,21 +1717,25 @@ class _ReservationModalContentState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          hasMonthlyPlan
+                          isTargetPensioned
                               ? '⭐ Modalidad: Pensionado Activo'
                               : 'Modalidad: Regular',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
-                            color: hasMonthlyPlan
+                            color: isTargetPensioned
                                 ? Colors.green.shade900
                                 : Colors.blue.shade900,
                           ),
                         ),
                         Text(
-                          hasMonthlyPlan
-                              ? 'Tarifa reducida por plan mensual: Bs. 15.00'
-                              : 'Tarifa regular: Bs. 18.00 (HU8: Pensionarse para reducir precio)',
+                          _isForFamiliar
+                              ? (isFamiliarPensioned
+                                    ? 'Familiar pensionado: Oferta aplicada (Bs. 15.00)'
+                                    : 'Familiar no pensionado: Precio por defecto (Bs. 18.00)')
+                              : (isEmployeePensioned
+                                    ? 'Empleado pensionado: Oferta aplicada (Bs. 15.00)'
+                                    : 'Empleado regular: Precio por defecto (Bs. 18.00)'),
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey.shade700,
@@ -1519,7 +1749,7 @@ class _ReservationModalContentState
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: hasMonthlyPlan
+                      color: isTargetPensioned
                           ? Colors.green.shade800
                           : Colors.blue.shade800,
                     ),
@@ -1552,7 +1782,10 @@ class _ReservationModalContentState
               width: double.infinity,
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: _isSubmitting ? null : _submitReservation,
+                onPressed:
+                    (_isSubmitting || isPast || isAfterCutoff || alreadyReserved)
+                        ? null
+                        : _submitReservation,
                 icon: _isSubmitting
                     ? const SizedBox(
                         width: 18,
@@ -1562,16 +1795,33 @@ class _ReservationModalContentState
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.check_circle_outline),
+                    : Icon(
+                        isPast || isAfterCutoff
+                            ? Icons.history_toggle_off
+                            : (alreadyReserved
+                                  ? Icons.block
+                                  : Icons.check_circle_outline),
+                      ),
                 label: Text(
-                  _isSubmitting ? 'Confirmando...' : 'Confirmar Reserva',
+                  _isSubmitting
+                      ? 'Confirmando...'
+                      : (isPast
+                            ? 'Fecha pasada'
+                            : (isAfterCutoff
+                                  ? 'Fuera de horario (Cerró 9:00 AM)'
+                                  : (alreadyReserved
+                                        ? 'Confirmar Reserva (Ya reservado)'
+                                        : 'Confirmar Reserva'))),
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor:
+                      (isPast || isAfterCutoff || alreadyReserved)
+                          ? Colors.grey.shade400
+                          : const Color(0xFF2563EB),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),

@@ -9,8 +9,6 @@ import 'package:restaurante_app/features/auth/domain/user_profile.dart';
 import 'package:restaurante_app/features/auth/presentation/login_screen.dart';
 import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:restaurante_app/features/familiares/data/supabase_family_repository.dart';
-import 'package:restaurante_app/features/menu/domain/bolivian_dish_entity.dart';
-import 'package:restaurante_app/features/menu/presentation/providers/weekly_menu_provider.dart';
 import 'package:restaurante_app/features/reservas/data/supabase_reservation_repository.dart';
 import 'package:restaurante_app/features/reservas/presentation/employee_screen.dart';
 import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
@@ -22,14 +20,6 @@ class _StaticAuthNotifier extends AuthNotifier {
 
   @override
   UserProfile? build() => _user;
-}
-
-class _StaticWeekNotifier extends SelectedWeekNotifier {
-  final DateTime _week;
-  _StaticWeekNotifier(this._week);
-
-  @override
-  DateTime build() => _week;
 }
 
 void main() {
@@ -245,11 +235,14 @@ void main() {
       addTearDown(container.dispose);
 
       final notifier = container.read(userReservationsProvider.notifier);
-      final date = DateTime(2026, 10, 24);
+      final now = DateTime.now();
+      final date1 = now.add(const Duration(days: 1));
+      final date2 = now.add(const Duration(days: 2));
+      final date3 = now.add(const Duration(days: 3));
 
       // 1. Reserva Almuerzo Completo
       await notifier.createReservation(
-        date: date,
+        date: date1,
         dishName: 'Reserva Test Silpancho + Sopa',
         platoPrincipal: 'Silpancho Cochabambino',
         sopaNombre: 'Sopa de Maní Tradicional',
@@ -259,7 +252,7 @@ void main() {
 
       // 2. Reserva Menú Vegetariano
       await notifier.createReservation(
-        date: date,
+        date: date2,
         dishName: 'Reserva Test Vegetariano',
         platoPrincipal: 'Quinua Real',
         sopaNombre: null,
@@ -269,7 +262,7 @@ void main() {
 
       // 3. Reserva Plato Especial
       await notifier.createReservation(
-        date: date,
+        date: date3,
         dishName: 'Reserva Test Plato Especial Único',
         platoPrincipal: 'Pique Macho Especial',
         sopaNombre: null,

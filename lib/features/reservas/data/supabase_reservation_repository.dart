@@ -110,6 +110,25 @@ class SupabaseReservationRepository implements ReservationRepository {
     }
 
     try {
+      // 1. Intento primario: Tabla oficial 'reserva' con relación de familiar y persona
+      final response = await client
+          .from('reserva')
+          .select('*, familiar(id_familiar, parentesco, persona(nombre, apellidos))')
+          .eq('id_usuario', userId)
+          .order('fecha', ascending: false);
+
+      final List<dynamic> data = response as List<dynamic>;
+      if (data.isNotEmpty) {
+        return data.map((item) {
+          final map = Map<String, dynamic>.from(item as Map);
+          return Reservation.fromJson(map);
+        }).toList();
+      }
+    } catch (eRes) {
+      debugPrint('ℹ️ Consulta en tabla reserva oficial: $eRes');
+    }
+
+    try {
       final response = await client
           .from('reservations')
           .select('*, dishes(name)')
@@ -181,28 +200,31 @@ class SupabaseReservationRepository implements ReservationRepository {
         final existingUserIds = reservations.map((r) => r.userId).toSet();
         final monthlyOrders = (monthlyResponse as List<dynamic>)
             .map((row) => Map<String, dynamic>.from(row as Map))
-            .where((user) => !existingUserIds.contains((user['id_usuario'] ?? user['id']).toString()))
-            .map(
-              (user) {
-                final uid = (user['id_usuario'] ?? user['id'] ?? '').toString();
-                final name = user['nombre_completo']?.toString() ??
-                    '${user['nombre'] ?? user['nombres'] ?? ''} ${user['apellidos'] ?? ''}'
-                        .trim();
-                return Reservation(
-                  id: 'monthly-$uid-$dateStr',
-                  userId: uid,
-                  userName: name,
-                  beneficiaryName: name,
-                  dishName: 'Almuerzo Completo del Día',
-                  date: date,
-                  type: 'pension',
-                  status: 'confirmada',
-                  price: 15.0,
-                  notes: 'Plan Mensual',
-                  createdAt: date,
-                );
-              },
+            .where(
+              (user) => !existingUserIds.contains(
+                (user['id_usuario'] ?? user['id']).toString(),
+              ),
             )
+            .map((user) {
+              final uid = (user['id_usuario'] ?? user['id'] ?? '').toString();
+              final name =
+                  user['nombre_completo']?.toString() ??
+                  '${user['nombre'] ?? user['nombres'] ?? ''} ${user['apellidos'] ?? ''}'
+                      .trim();
+              return Reservation(
+                id: 'monthly-$uid-$dateStr',
+                userId: uid,
+                userName: name,
+                beneficiaryName: name,
+                dishName: 'Almuerzo Completo del Día',
+                date: date,
+                type: 'pension',
+                status: 'confirmada',
+                price: 15.0,
+                notes: 'Plan Mensual',
+                createdAt: date,
+              );
+            })
             .toList();
 
         return [...reservations, ...monthlyOrders];
@@ -309,8 +331,25 @@ class SupabaseReservationRepository implements ReservationRepository {
               ? 'Almuerzo Completo (${reservation.entradaNombre ?? "Ensalada Fresca del Día"} + ${reservation.sopaNombre ?? "Sopa del día"} + ${reservation.platoPrincipal ?? "Segundo"})'
               : (reservation.platoPrincipal ?? 'Plato del Día'));
 
+    // 1. Intento primario: Inserción directa en tabla real de Supabase 'reserva'
     try {
-      // 1. Intento primario con columnas dedicadas para Almuerzo Completo en Supabase
+      final payloadReservaReal = {
+        if (_isUuid(reservation.userId)) 'id_usuario': reservation.userId,
+        if (_isUuid(reservation.familiarId)) 'id_familiar': reservation.familiarId,
+        'fecha': reservation.date.toUtc().toIso8601String(),
+        'costo_aplicado': reservation.price,
+        'estado': reservation.status.toUpperCase(),
+        'es_pension': reservation.price <= 15.0,
+        'origen': reservation.familiarId != null ? 'FAMILIAR' : 'EMPLEADO',
+      };
+      await client.from('reserva').insert(payloadReservaReal);
+      return;
+    } catch (eReal) {
+      debugPrint('ℹ️ Inserción en tabla reserva falló ($eReal). Intentando tablas fallback...');
+    }
+
+    try {
+      // 2. Fallback: Columnas extendidas en Supabase
       final payload = {
         'id': reservation.id,
         'user_id': reservation.userId,
@@ -335,7 +374,6 @@ class SupabaseReservationRepository implements ReservationRepository {
 
       await client.from('reservations').insert(payload);
     } catch (e1) {
-      // 2. Fallback de compatibilidad: Por si aún no se corrió la migración de nuevas columnas
       try {
         final payloadFallback = {
           'id': reservation.id,
@@ -357,22 +395,7 @@ class SupabaseReservationRepository implements ReservationRepository {
         };
         await client.from('reservations').insert(payloadFallback);
       } catch (e2) {
-        // 3. Inserción en tabla real de Supabase 'reserva'
-        try {
-          final payloadReservaReal = {
-            if (_isUuid(reservation.userId)) 'id_usuario': reservation.userId,
-            'fecha': reservation.date.toUtc().toIso8601String(),
-            'costo_aplicado': reservation.price,
-            'estado': reservation.status.toUpperCase(),
-            'es_pension': reservation.price <= 15.0,
-            'origen': reservation.familiarId != null ? 'FAMILIAR' : 'EMPLEADO',
-          };
-          await client.from('reserva').insert(payloadReservaReal);
-        } catch (e3) {
-          debugPrint(
-            '⚠️ Error al guardar reserva en Supabase ($e1, $e2, $e3). Guardada en memoria.',
-          );
-        }
+        debugPrint('⚠️ Error guardando en fallback ($e1, $e2). Guardado en memoria.');
       }
     }
   }
@@ -399,20 +422,28 @@ class SupabaseReservationRepository implements ReservationRepository {
     if (client == null) return;
 
     try {
+      final numericId = int.tryParse(reservationId);
+      if (numericId != null) {
+        await client
+            .from('reserva')
+            .update({'estado': 'CANCELADA'})
+            .eq('id_reserva', numericId);
+      } else {
+        await client
+            .from('reserva')
+            .update({'estado': 'CANCELADA'})
+            .eq('id_reserva', reservationId);
+      }
+    } catch (eRes) {
+      debugPrint('ℹ️ Error actualizando estado CANCELADA en tabla reserva: $eRes');
+    }
+
+    try {
       await client
           .from('reservations')
           .update({'status': 'cancelada'})
           .eq('id', reservationId);
-    } catch (e1) {
-      try {
-        await client
-            .from('reservas')
-            .update({'estado': 'CANCELADA'})
-            .eq('id', reservationId);
-      } catch (e2) {
-        debugPrint('⚠️ Error al cancelar reserva en Supabase: $e1, $e2');
-      }
-    }
+    } catch (_) {}
   }
 
   @override
@@ -431,6 +462,15 @@ class SupabaseReservationRepository implements ReservationRepository {
 
     final client = SupabaseConfig.client;
     if (client == null) return;
+
+    try {
+      final numericId = int.tryParse(reservationId);
+      if (numericId != null) {
+        await client.from('reserva').update({'estado': status.toUpperCase()}).eq('id_reserva', numericId);
+      } else {
+        await client.from('reserva').update({'estado': status.toUpperCase()}).eq('id', reservationId);
+      }
+    } catch (_) {}
 
     try {
       await client
@@ -474,8 +514,9 @@ class SupabaseReservationRepository implements ReservationRepository {
                   Holiday(
                     id: row['id_excepcion']?.toString() ?? 'ex-${list.length}',
                     date: dt,
-                    name: row['motivo']?.toString() ?? 'Excepción de calendario',
-                    description: 'Día no habilitado en calendario (HU6)',
+                    name:
+                        row['motivo']?.toString() ?? 'Excepción de calendario',
+                    description: 'Día no habilitado en calendario',
                   ),
                 );
               }
