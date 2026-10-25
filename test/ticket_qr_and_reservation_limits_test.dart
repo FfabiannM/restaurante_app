@@ -47,6 +47,34 @@ class MockReservationRepository implements ReservationRepository {
   }
 
   @override
+  Future<void> markReservationAsPickedUp(String reservationId, bool recogido) async {
+    mockReservations = mockReservations.map((r) {
+      if (r.id == reservationId) {
+        return r.copyWith(recogido: recogido);
+      }
+      return r;
+    }).toList();
+  }
+
+  @override
+  Future<List<Reservation>> getUserReservationsForPeriod(
+      String userId, DateTime startDate, DateTime endDate) async {
+    return mockReservations.where((r) => r.userId == userId).toList();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getAttendanceForDate(DateTime date) async => [];
+
+  @override
+  Future<void> registerAttendance({
+    required String userId,
+    int? reservationId,
+    required DateTime date,
+    bool asistio = true,
+    String? observacion,
+  }) async {}
+
+  @override
   Future<List<Holiday>> getHolidays() async => [];
 }
 
@@ -354,10 +382,10 @@ void main() {
       // Reservar en día hábil después de las 9:00 AM -> Bloqueado
       expect(policy.checkCanReserve(weekday, afterCutoff).isAllowed, isFalse);
 
-      // Cancelar en día hábil antes o a las 9:00 AM -> Permitido
+      // Cancelar en día hábil antes de las 9:00 AM -> Permitido
       expect(policy.checkCanCancel(weekday, beforeCutoff).isAllowed, isTrue);
-      expect(policy.checkCanCancel(weekday, atCutoff).isAllowed, isTrue);
-      // Cancelar en día hábil después de las 9:00 AM -> Bloqueado
+      // Cancelar en día hábil a partir de las 9:00 AM -> Bloqueado
+      expect(policy.checkCanCancel(weekday, atCutoff).isAllowed, isFalse);
       expect(policy.checkCanCancel(weekday, afterCutoff).isAllowed, isFalse);
 
       // Días futuros -> Siempre permitidos

@@ -25,13 +25,13 @@ class UserProfile {
 
   bool get isEmpleado => role.toLowerCase() == 'empleado';
   bool get isAdmin =>
-      role.toLowerCase() == 'admin' || role.toLowerCase() == 'institucion';
+      role.toLowerCase() == 'admin' || role.toLowerCase() == 'administrador';
   bool get isCocina =>
-      role.toLowerCase() == 'cocina' || role.toLowerCase() == 'encargado';
+      role.toLowerCase() == 'cocina' || role.toLowerCase() == 'institucion';
 
   // Compatibilidad hacia atrás
   bool get isEncargado => isCocina;
-  bool get isInstitucion => isAdmin;
+  bool get isInstitucion => isCocina;
 
   String get roleDisplay {
     if (isCocina) {
@@ -72,8 +72,12 @@ class UserProfile {
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     // Compatible con vista_usuarios (id_usuario, nombre_completo, nombre, apellidos, rol, ci_codigo, telefono, activo)
     // y tablas legacy usuarios/profiles
-    String name = json['nombre_completo'] ?? json['full_name'] ?? json['fullName'] ?? '';
-    if (name.isEmpty && (json['nombre'] != null || json['nombres'] != null || json['apellidos'] != null)) {
+    String name =
+        json['nombre_completo'] ?? json['full_name'] ?? json['fullName'] ?? '';
+    if (name.isEmpty &&
+        (json['nombre'] != null ||
+            json['nombres'] != null ||
+            json['apellidos'] != null)) {
       final primerNombre = json['nombre'] ?? json['nombres'] ?? '';
       name = '$primerNombre ${json['apellidos'] ?? ''}'.trim();
     }
@@ -84,11 +88,13 @@ class UserProfile {
     final rawRole = (json['rol'] ?? json['role'] ?? 'empleado')
         .toString()
         .toLowerCase();
-    final normalizedRole = rawRole.contains('admin') || rawRole.contains('institucion')
+    final normalizedRole = rawRole.contains('admin')
         ? 'admin'
-        : rawRole.contains('cocina') || rawRole.contains('encargado')
-            ? 'cocina'
-            : 'empleado';
+        : (rawRole.contains('cocina') ||
+              rawRole.contains('encargado') ||
+              rawRole.contains('institucion'))
+        ? 'cocina'
+        : 'empleado';
 
     return UserProfile(
       id: json['id_usuario']?.toString() ?? json['id']?.toString() ?? '',

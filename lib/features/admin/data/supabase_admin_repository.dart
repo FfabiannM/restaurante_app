@@ -171,6 +171,26 @@ class SupabaseAdminRepository {
         return const [];
       }
 
+      Set<String> pensionedUserIds = {};
+      Set<String> pensionedFamiliarIds = {};
+      try {
+        final pensionRes = await client
+            .from('pension')
+            .select('id_usuario, id_familiar, modalidad')
+            .eq('modalidad', 'Pensionado');
+        for (final row in (pensionRes as List<dynamic>)) {
+          final uId = row['id_usuario']?.toString();
+          final fId = row['id_familiar']?.toString();
+          if (fId != null && fId.isNotEmpty) {
+            pensionedFamiliarIds.add(fId);
+          } else if (uId != null && uId.isNotEmpty) {
+            pensionedUserIds.add(uId);
+          }
+        }
+      } catch (e) {
+        debugPrint('ℹ️ No se pudo cargar estado de pensiones: $e');
+      }
+
       final List<AdminEmployee> employees = [];
       for (final item in data) {
         final idUsuario = (item['id_usuario'] ?? item['id'] ?? '').toString();
@@ -182,8 +202,9 @@ class SupabaseAdminRepository {
           );
           familiares = rawFamiliares.map((f) {
             final persona = f['persona'] as Map<String, dynamic>?;
+            final famId = (f['id_familiar'] ?? f['id'] ?? '').toString();
             return Familiar(
-              id: (f['id_familiar'] ?? f['id'] ?? '').toString(),
+              id: famId,
               empleadoId: idUsuario,
               ci: '',
               telefono: (persona?['telefono'] ?? f['telefono'] ?? '')
@@ -194,11 +215,16 @@ class SupabaseAdminRepository {
                   .toString(),
               parentesco: f['parentesco']?.toString() ?? 'Hijo',
               activo: f['activo'] != false,
+              hasMonthlyPlan: pensionedFamiliarIds.contains(famId),
             );
           }).toList();
         } catch (_) {}
 
-        employees.add(AdminEmployee.fromJson(item, familiares: familiares));
+        final emp = AdminEmployee.fromJson(item, familiares: familiares);
+        employees.add(emp.copyWith(
+          hasMonthlyPlan:
+              pensionedUserIds.contains(idUsuario) || emp.hasMonthlyPlan,
+        ));
       }
       return employees;
     } catch (e) {
@@ -530,37 +556,78 @@ class SupabaseAdminRepository {
     );
   }
 
-  /// Alterna o activa el plan mensual (tarifa Bs. 15 vs Bs. 18)
-  Future<void> toggleMonthlyPlan(String employeeId, bool hasPlan) async {
+  /// Alterna o activa el plan mensual (tarifa Bs. 15 vs Bs. 18) para empleado o familiar
+  Future<void> toggleMonthlyPlan(
+    String employeeId,
+    bool hasPlan, {
+    String? familiarId,
+  }) async {
     final empIndex = _employees.indexWhere((e) => e.id == employeeId);
     if (empIndex != -1) {
-      _employees[empIndex] = _employees[empIndex].copyWith(
-        hasMonthlyPlan: hasPlan,
-      );
+      final currentEmp = _employees[empIndex];
+      if (familiarId != null) {
+        final updatedFams = currentEmp.familiares.map((f) {
+          if (f.id == familiarId) {
+            return f.copyWith(hasMonthlyPlan: hasPlan);
+          }
+          return f;
+        }).toList();
+        _employees[empIndex] = currentEmp.copyWith(familiares: updatedFams);
+      } else {
+        _employees[empIndex] = currentEmp.copyWith(
+          hasMonthlyPlan: hasPlan,
+        );
+      }
     }
 
     final client = SupabaseConfig.client;
     if (client != null) {
       try {
-        if (hasPlan) {
-          final currentMonth = DateTime(
-            DateTime.now().year,
-            DateTime.now().month,
-            1,
-          );
-          final monthStr =
-              "${currentMonth.year}-${currentMonth.month.toString().padLeft(2, '0')}-01";
-          await client.from('suscripciones').upsert({
-            'empleado_id': employeeId,
-            'mes': monthStr,
-            'modalidad': 'MENSUAL',
-            'activo': true,
-          });
+        final now = DateTime.now();
+        final modalidad = hasPlan ? 'Pensionado' : 'Regular';
+        if (familiarId != null) {
+          final existing = await client
+              .from('pension')
+              .select('id_pension')
+              .eq('id_familiar', familiarId)
+              .maybeSingle();
+
+          if (existing != null && existing['id_pension'] != null) {
+            await client
+                .from('pension')
+                .update({'modalidad': modalidad})
+                .eq('id_pension', existing['id_pension']);
+          } else if (hasPlan) {
+            await client.from('pension').insert({
+              'id_usuario': employeeId,
+              'id_familiar': familiarId,
+              'year': now.year,
+              'mes': now.month,
+              'modalidad': 'Pensionado',
+            });
+          }
         } else {
-          await client
-              .from('suscripciones')
-              .update({'activo': false})
-              .eq('empleado_id', employeeId);
+          final existing = await client
+              .from('pension')
+              .select('id_pension')
+              .eq('id_usuario', employeeId)
+              .isFilter('id_familiar', null)
+              .maybeSingle();
+
+          if (existing != null && existing['id_pension'] != null) {
+            await client
+                .from('pension')
+                .update({'modalidad': modalidad})
+                .eq('id_pension', existing['id_pension']);
+          } else if (hasPlan) {
+            await client.from('pension').insert({
+              'id_usuario': employeeId,
+              'id_familiar': null,
+              'year': now.year,
+              'mes': now.month,
+              'modalidad': 'Pensionado',
+            });
+          }
         }
       } catch (e) {
         debugPrint('⚠️ Error actualizando plan mensual en Supabase: $e');
