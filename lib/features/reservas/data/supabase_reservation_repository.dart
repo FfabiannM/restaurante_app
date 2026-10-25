@@ -469,14 +469,49 @@ class SupabaseReservationRepository implements ReservationRepository {
     }
 
     try {
-      final response = await client.from('holidays').select();
-      final List<dynamic> data = response as List<dynamic>;
-      if (data.isEmpty) {
+      final List<Holiday> list = [];
+
+      // 1. Consultar excepcion_calendario (HU6)
+      try {
+        final exRes = await client.from('excepcion_calendario').select();
+        if (exRes.isNotEmpty) {
+          for (final row in exRes) {
+            final fStr = row['fecha']?.toString();
+            if (fStr != null && fStr.isNotEmpty) {
+              final dt = DateTime.tryParse(fStr);
+              if (dt != null) {
+                list.add(
+                  Holiday(
+                    id: row['id_excepcion']?.toString() ?? 'ex-${list.length}',
+                    date: dt,
+                    name: row['motivo']?.toString() ?? 'Excepción de calendario',
+                    description: 'Día no habilitado en calendario (HU6)',
+                  ),
+                );
+              }
+            }
+          }
+        }
+      } catch (eEx) {
+        debugPrint('ℹ️ No se pudo cargar excepcion_calendario: $eEx');
+      }
+
+      // 2. Consultar tabla holidays si existiera
+      try {
+        final response = await client.from('holidays').select();
+        final List<dynamic> data = response as List<dynamic>;
+        if (data.isNotEmpty) {
+          list.addAll(
+            data.map((item) => Holiday.fromJson(item as Map<String, dynamic>)),
+          );
+        }
+      } catch (_) {}
+
+      // Si no hay datos, incluir los feriados por defecto
+      if (list.isEmpty) {
         return Holiday.defaultHolidays;
       }
-      return data
-          .map((item) => Holiday.fromJson(item as Map<String, dynamic>))
-          .toList();
+      return list;
     } catch (e) {
       debugPrint('⚠️ Error al obtener feriados desde Supabase: $e');
       return Holiday.defaultHolidays;

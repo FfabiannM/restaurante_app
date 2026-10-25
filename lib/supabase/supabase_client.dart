@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:restaurante_app/supabase/usuarios_service.dart';
 
 export 'package:restaurante_app/supabase/usuarios_service.dart';
+export 'package:restaurante_app/supabase/menu_service.dart';
 
 /// Fallback credentials matching the project configuration (.env)
 const String kDefaultSupabaseUrl = 'https://vzcrkhjqdsnxizhyjjjk.supabase.co';
