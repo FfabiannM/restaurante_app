@@ -357,27 +357,17 @@ class SupabaseReservationRepository implements ReservationRepository {
         };
         await client.from('reservations').insert(payloadFallback);
       } catch (e2) {
-        // 3. Fallback hacia tabla alternativa 'reservas'
+        // 3. Inserción en tabla real de Supabase 'reserva'
         try {
-          final payloadReservas = {
-            'empleado_id': reservation.userId,
-            if (reservation.familiarId != null &&
-                int.tryParse(reservation.familiarId!) != null)
-              'familiar_id': int.tryParse(reservation.familiarId!),
-            'fecha': dateStr,
+          final payloadReservaReal = {
+            if (_isUuid(reservation.userId)) 'id_usuario': reservation.userId,
+            'fecha': reservation.date.toUtc().toIso8601String(),
+            'costo_aplicado': reservation.price,
             'estado': reservation.status.toUpperCase(),
-            'tipo_tarifa': reservation.price <= 15
-                ? 'PLAN_MENSUAL'
-                : 'PARTICULAR',
-            'precio': reservation.price,
-            'notas': [
-              if (reservation.notes != null && reservation.notes!.isNotEmpty)
-                reservation.notes,
-              'Categoría: ${reservation.menuCategory.label}',
-              'Combo: $comboDishName',
-            ].join(' | '),
+            'es_pension': reservation.price <= 15.0,
+            'origen': reservation.familiarId != null ? 'FAMILIAR' : 'EMPLEADO',
           };
-          await client.from('reservas').insert(payloadReservas);
+          await client.from('reserva').insert(payloadReservaReal);
         } catch (e3) {
           debugPrint(
             '⚠️ Error al guardar reserva en Supabase ($e1, $e2, $e3). Guardada en memoria.',

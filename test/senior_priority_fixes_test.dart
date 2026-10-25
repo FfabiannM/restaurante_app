@@ -204,29 +204,11 @@ void main() {
     });
   });
 
-  group('3. Reestructuración: Menú en Pantalla de Empleado (3 Categorías)', () {
-    testWidgets('EmployeeScreen permite alternar Almuerzo Completo, Menú Vegetariano y Plato Especial', (tester) async {
+  group('3. Menú Dinámico y Platos Reales por Tipo (HU7, HU8, HU9)', () {
+    testWidgets('EmployeeScreen muestra platos reales y permite filtrar por tipo de plato', (tester) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
-
-      final today = DateTime.now();
-      final monday = today.subtract(Duration(days: today.weekday - 1));
-
-      final testMenu = [
-        MenuSemanalItem(
-          id: 1,
-          fecha: today,
-          diaSemana: 'Hoy',
-          platoCatalogoId: 1,
-          platoNombre: 'Silpancho Cochabambino',
-          platoDescripcion: 'Carne apanada con arroz y papas',
-          platoRegion: 'Cochabamba',
-          tipoPlato: 'Segundo',
-          estado: 'publicado',
-          imagenUrl: 'assets/images/01_silpancho.jpg',
-        ),
-      ];
 
       await tester.pumpWidget(
         ProviderScope(
@@ -234,8 +216,6 @@ void main() {
             authProvider.overrideWith(
               () => _StaticAuthNotifier(SupabaseAuthRepository.demoEmpleado),
             ),
-            publishedWeeklyMenuProvider.overrideWith((ref) async => testMenu),
-            selectedWeekProvider.overrideWith(() => _StaticWeekNotifier(monday)),
           ],
           child: const MaterialApp(
             home: EmployeeScreen(),
@@ -244,40 +224,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 1. Categoría 1 por defecto: Almuerzo Completo (Sopa + Plato Fuerte)
-      expect(find.text('Almuerzo Completo'), findsWidgets);
-      expect(find.text('Sopa de la Gastronomía Boliviana Incluida:'), findsOneWidget);
-      expect(find.text('🍱 Almuerzo Completo (Combo del Día)'), findsOneWidget);
-      expect(find.textContaining('Almuerzo Completo: Silpancho Cochabambino + Sopa de Maní Tradicional'), findsOneWidget);
+      // Verificar chips de tipo
+      expect(find.text('Todos'), findsOneWidget);
+      expect(find.text('Segundo'), findsOneWidget);
+      expect(find.text('Sopa'), findsOneWidget);
+      expect(find.text('Vegetariano'), findsOneWidget);
 
-      // 2. Cambiar a Categoría 2: Menú Vegetariano (Independiente)
-      final vegTab = find.text('Menú Vegetariano');
-      expect(vegTab, findsOneWidget);
-      await tester.tap(vegTab);
-      await tester.pumpAndSettle();
-
-      expect(find.text('🥗 Menú Vegetariano (Opción Independiente)'), findsOneWidget);
-      expect(find.textContaining('Menú Vegetariano:'), findsOneWidget);
-      // Sopa no debe estar en la categoría vegetariana independiente
-      expect(find.text('Sopa de la Gastronomía Boliviana Incluida:'), findsNothing);
-
-      // 3. Cambiar a Categoría 3: Plato Especial (Independiente)
-      final especialTab = find.text('Plato Especial');
-      expect(especialTab, findsOneWidget);
-      await tester.tap(especialTab);
-      await tester.pumpAndSettle();
-
-      expect(find.text('⭐ Plato Especial (Categoría Independiente)'), findsOneWidget);
-      expect(find.textContaining('Plato Especial:'), findsOneWidget);
-      expect(find.text('Sopa de la Gastronomía Boliviana Incluida:'), findsNothing);
-
-      // 4. Regresar a Almuerzo Completo
-      final almuerzoTab = find.text('Almuerzo Completo');
-      await tester.tap(almuerzoTab);
-      await tester.pumpAndSettle();
-
-      expect(find.text('🍱 Almuerzo Completo (Combo del Día)'), findsOneWidget);
-      expect(find.text('Sopa de la Gastronomía Boliviana Incluida:'), findsOneWidget);
+      // Verificar selector de semanas
+      expect(find.text('Semana Actual'), findsOneWidget);
+      expect(find.text('Semana Siguiente'), findsOneWidget);
     });
 
     test('Creación de reservas con datos estructurados para cada categoría', () async {
@@ -295,7 +250,7 @@ void main() {
       // 1. Reserva Almuerzo Completo
       await notifier.createReservation(
         date: date,
-        dishName: 'Almuerzo Completo (Silpancho + Sopa de Maní)',
+        dishName: 'Reserva Test Silpancho + Sopa',
         platoPrincipal: 'Silpancho Cochabambino',
         sopaNombre: 'Sopa de Maní Tradicional',
         isAlmuerzoCompleto: true,
@@ -305,8 +260,8 @@ void main() {
       // 2. Reserva Menú Vegetariano
       await notifier.createReservation(
         date: date,
-        dishName: 'Menú Vegetariano (Quinua Real con Champiñones y Palta)',
-        platoPrincipal: 'Quinua Real con Champiñones y Palta',
+        dishName: 'Reserva Test Vegetariano',
+        platoPrincipal: 'Quinua Real',
         sopaNombre: null,
         isAlmuerzoCompleto: false,
         price: 15.0,
@@ -315,7 +270,7 @@ void main() {
       // 3. Reserva Plato Especial
       await notifier.createReservation(
         date: date,
-        dishName: 'Plato Especial (Pique Macho Especial)',
+        dishName: 'Reserva Test Plato Especial Único',
         platoPrincipal: 'Pique Macho Especial',
         sopaNombre: null,
         isAlmuerzoCompleto: false,
@@ -323,20 +278,19 @@ void main() {
       );
 
       final reservations = await resRepo.getUserReservations('demo-user-123');
-      expect(reservations.length, greaterThanOrEqualTo(3));
 
       final resAlmuerzo = reservations.firstWhere(
-        (r) => r.dishName == 'Almuerzo Completo (Silpancho + Sopa de Maní)',
+        (r) => r.dishName == 'Reserva Test Silpancho + Sopa',
       );
       expect(resAlmuerzo.sopaNombre, equals('Sopa de Maní Tradicional'));
       expect(resAlmuerzo.platoPrincipal, equals('Silpancho Cochabambino'));
       expect(resAlmuerzo.isAlmuerzoCompleto, isTrue);
 
-      final resVeg = reservations.firstWhere((r) => r.dishName.contains('Vegetariano'));
+      final resVeg = reservations.firstWhere((r) => r.dishName == 'Reserva Test Vegetariano');
       expect(resVeg.isAlmuerzoCompleto, isFalse);
       expect(resVeg.sopaNombre, isNull);
 
-      final resEsp = reservations.firstWhere((r) => r.dishName.contains('Especial'));
+      final resEsp = reservations.firstWhere((r) => r.dishName == 'Reserva Test Plato Especial Único');
       expect(resEsp.isAlmuerzoCompleto, isFalse);
       expect(resEsp.sopaNombre, isNull);
     });

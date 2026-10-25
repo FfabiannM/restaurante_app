@@ -6,7 +6,7 @@ class MonthlyPensionSubscription {
   final int totalDays;
   final double pricePerDay;
   final double totalPrice;
-  final String status; // 'activa', 'cancelada', 'finalizada'
+  final String status; // 	'Pensionado', 'Regular'
   final DateTime createdAt;
 
   const MonthlyPensionSubscription({
@@ -17,17 +17,21 @@ class MonthlyPensionSubscription {
     required this.totalDays,
     this.pricePerDay = 15.0,
     required this.totalPrice,
-    this.status = 'activa',
+    this.status = 'Pensionado',
     required this.createdAt,
   });
 
-  bool get isActive => status == 'activa';
+  bool get isActive => status == 'Pensionado';
 
   /// Regla de negocio: Bloquea cambio o cancelación una vez el mes ha iniciado.
   /// Si el año y mes seleccionado ya inició (o pasó), no se puede cancelar ni suscribir.
   bool canModifyOrCancel(DateTime currentTime) {
     final firstDayOfMonth = DateTime(year, month, 1);
-    final today = DateTime(currentTime.year, currentTime.month, currentTime.day);
+    final today = DateTime(
+      currentTime.year,
+      currentTime.month,
+      currentTime.day,
+    );
     return today.isBefore(firstDayOfMonth);
   }
 

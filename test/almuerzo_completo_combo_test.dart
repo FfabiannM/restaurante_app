@@ -102,31 +102,13 @@ void main() {
     );
   });
 
-  group('2. Interfaz de EmployeeScreen con Almuerzo Completo y Sopa Boliviana', () {
+  group('2. Interfaz de EmployeeScreen con Platos Reales y HU7/HU8/HU9', () {
     testWidgets(
-      'EmployeeScreen muestra selector de sopa boliviana y banner de Almuerzo Completo',
+      'EmployeeScreen muestra platos reales del menú y opciones de reserva para empleado y familiar',
       (tester) async {
         tester.view.physicalSize = const Size(800, 1600);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(() => tester.view.resetPhysicalSize());
-
-        final today = DateTime.now();
-        final monday = today.subtract(Duration(days: today.weekday - 1));
-
-        final testMenu = [
-          MenuSemanalItem(
-            id: 1,
-            fecha: today,
-            diaSemana: 'Hoy',
-            platoCatalogoId: 1,
-            platoNombre: 'Silpancho Cochabambino',
-            platoDescripcion: 'Carne apanada tierna con arroz y papas',
-            platoRegion: 'Cochabamba',
-            tipoPlato: 'Segundo',
-            estado: 'publicado',
-            imagenUrl: 'assets/images/01_silpancho.jpg',
-          ),
-        ];
 
         await tester.pumpWidget(
           ProviderScope(
@@ -134,55 +116,20 @@ void main() {
               authProvider.overrideWith(
                 () => _StaticAuthNotifier(SupabaseAuthRepository.demoEmpleado),
               ),
-              publishedWeeklyMenuProvider.overrideWith((ref) async => testMenu),
-              selectedWeekProvider.overrideWith(
-                () => _StaticWeekNotifier(monday),
-              ),
             ],
             child: const MaterialApp(home: EmployeeScreen()),
           ),
         );
         await tester.pumpAndSettle();
 
-        // Verificar que se renderizan los tres componentes del combo
-        expect(find.text('Sopa del día incluida:'), findsOneWidget);
-        expect(find.text('1. Entrada / Ensalada:'), findsOneWidget);
+        // Verificar navegación de semanas
+        expect(find.text('Semana Actual'), findsOneWidget);
+        expect(find.text('Semana Siguiente'), findsOneWidget);
 
-        // Verificar que el combo Almuerzo Completo se muestra
-        expect(
-          find.text('🍱 Almuerzo Completo (Combo del Día)'),
-          findsOneWidget,
-        );
-        expect(
-          find.text('Silpancho Cochabambino + Sopa de Maní Tradicional'),
-          findsWidgets,
-        );
-
-        // Verificar que en el desglose de costo se indica el combo Almuerzo Completo
-        expect(
-          find.textContaining(
-            'Almuerzo Completo: Ensalada (Ensalada Fresca del Día) + Sopa del día (Sopa de Maní Tradicional)',
-          ),
-          findsOneWidget,
-        );
-
-        // Seleccionar otra sopa boliviana (ej. Chairo Paceño)
-        final soupDropdownFinder = find.byKey(
-          ValueKey('soup_selector_${today.year}_${today.month}_${today.day}'),
-        );
-        expect(soupDropdownFinder, findsOneWidget);
-        await tester.tap(soupDropdownFinder);
-        await tester.pumpAndSettle();
-
-        final chairoOption = find.text('Chairo Paceño').last;
-        await tester.tap(chairoOption);
-        await tester.pumpAndSettle();
-
-        // Verificar actualización del combo
-        expect(
-          find.text('Silpancho Cochabambino + Chairo Paceño'),
-          findsWidgets,
-        );
+        // Verificar comensales y tarifa (HU8)
+        expect(find.text('Reserva Individual'), findsOneWidget);
+        expect(find.text('Reserva Conjunta'), findsOneWidget);
+        expect(find.textContaining('Confirmar Reserva'), findsWidgets);
       },
     );
   });

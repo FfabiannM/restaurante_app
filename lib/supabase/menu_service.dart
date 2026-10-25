@@ -44,20 +44,30 @@ class MenuService {
   /// Calcula el rango semanal de Lunes a Viernes según la fórmula solicitada:
   /// `final inicioSemana = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));`
   /// `final finSemana = inicioSemana.add(const Duration(days: 4)); // Lunes a Viernes`
+  /// Con soporte para desplazamiento de semanas ([weekOffset]: 0 actual, 1 siguiente, -1 anterior).
   static ({DateTime inicioSemana, DateTime finSemana}) getRangoSemana({
     DateTime? referenceDate,
+    int weekOffset = 0,
   }) {
     final ref = referenceDate ?? DateTime.now();
     final cleanRef = DateTime(ref.year, ref.month, ref.day);
-    final inicioSemana =
-        cleanRef.subtract(Duration(days: cleanRef.weekday - 1));
-    final finSemana = inicioSemana.add(const Duration(days: 4));
-    return (inicioSemana: inicioSemana, finSemana: finSemana);
+    var baseMonday = cleanRef.subtract(Duration(days: cleanRef.weekday - 1));
+    if (weekOffset != 0) {
+      baseMonday = baseMonday.add(Duration(days: 7 * weekOffset));
+    }
+    final finSemana = baseMonday.add(const Duration(days: 4));
+    return (inicioSemana: baseMonday, finSemana: finSemana);
   }
 
-  /// Retorna los 5 días hábiles de la semana (Lunes a Viernes)
-  static List<DateTime> getDiasSemana({DateTime? referenceDate}) {
-    final rango = getRangoSemana(referenceDate: referenceDate);
+  /// Retorna los 5 días hábiles de la semana (Lunes a Viernes) según el [weekOffset]
+  static List<DateTime> getDiasSemana({
+    DateTime? referenceDate,
+    int weekOffset = 0,
+  }) {
+    final rango = getRangoSemana(
+      referenceDate: referenceDate,
+      weekOffset: weekOffset,
+    );
     return List.generate(
       5,
       (index) => rango.inicioSemana.add(Duration(days: index)),
@@ -118,9 +128,13 @@ class MenuService {
   /// con `excepcion_calendario` (HU6).
   static Future<List<Map<String, dynamic>>> getMenusSemana({
     DateTime? referenceDate,
+    int weekOffset = 0,
     bool filtrarExcepciones = true,
   }) async {
-    final rango = getRangoSemana(referenceDate: referenceDate);
+    final rango = getRangoSemana(
+      referenceDate: referenceDate,
+      weekOffset: weekOffset,
+    );
     final inicioStr = formatDate(rango.inicioSemana);
     final finStr = formatDate(rango.finSemana);
 
@@ -287,7 +301,11 @@ class MenuService {
 
     final bool isFav =
         json['is_favorite'] == true || json['isFavorite'] == true;
-    final bool isAvail = json['activo'] ?? json['is_available'] ?? true;
+    final bool isAvail =
+        json['is_available'] != false && json['isAvailable'] != false;
+    final rawTipo = json['tipo']?.toString().trim();
+    final String? tipoEnum =
+        (rawTipo != null && rawTipo.isNotEmpty) ? rawTipo : null;
 
     return Dish(
       id: idStr.isNotEmpty ? idStr : '0',
@@ -297,6 +315,7 @@ class MenuService {
           : 'Plato preparado y registrado en el menú institucional.',
       imageUrl: resolvedImg,
       category: category,
+      tipo: tipoEnum,
       price: precio,
       calories: calorias,
       isFavorite: isFav,

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restaurante_app/core/utils/date_utils.dart';
 import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:restaurante_app/features/familiares/domain/familiar_entity.dart';
+import 'package:restaurante_app/features/familiares/presentation/providers/family_providers.dart';
 import 'package:restaurante_app/features/menu/data/supabase_menu_repository.dart';
-import 'package:restaurante_app/features/menu/domain/daily_menu_entity.dart';
-import 'package:restaurante_app/features/menu/domain/daily_menu_policy.dart';
 import 'package:restaurante_app/features/menu/domain/menu_entity.dart';
 import 'package:restaurante_app/features/menu/domain/menu_repository.dart';
+import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
+import 'package:restaurante_app/features/reservas/domain/usecases/reservation_policy.dart';
+import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
 import 'package:restaurante_app/supabase/menu_service.dart';
 
 class MenuScreen extends ConsumerStatefulWidget {
@@ -19,7 +23,10 @@ class MenuScreen extends ConsumerStatefulWidget {
 
 class _MenuScreenState extends ConsumerState<MenuScreen> {
   final MenuRepository _repository = SupabaseMenuRepository();
+  final ReservationPolicy _reservationPolicy = ReservationPolicy();
 
+  // Desplazamiento semanal: 0 = Semana actual, 1 = Semana siguiente
+  int _weekOffset = 0;
   DateTime _selectedDate = DateTime.now();
   List<DateTime> _weekDays = [];
   Set<String> _excepcionesFechas = {};
@@ -30,35 +37,40 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   bool _isMenuDisponible = false;
 
   List<Dish> _dishes = [];
-  DailyMenu? _dailyMenu;
   bool _isLoading = true;
   String _selectedCategory = 'Todos';
   String _searchQuery = '';
 
-  List<String> _categories(bool isThursday) => [
-        'Todos',
-        'Almuerzo Completo',
-        'Segundo',
-        'Sopa',
-        'Especial',
-        'Vegetariano',
-        if (isThursday) 'Postre',
-      ];
+  // Enum de plato: tipo (Sopa, Segundo, Vegetariano). Soporta nulos.
+  static const List<String> _categories = [
+    'Todos',
+    'Segundo',
+    'Sopa',
+    'Vegetariano',
+  ];
 
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    // Si el día actual es domingo (weekday == 7), comenzar por defecto en la semana siguiente (offset 1)
+    // para evitar mantenerse en el viernes de la semana anterior.
+    if (now.weekday == DateTime.sunday) {
+      _weekOffset = 1;
+    }
     _initWeekAndLoad();
   }
 
-  /// Inicializa la semana laboral (Lunes a Viernes) y carga los menús del día
+  /// Inicializa la semana laboral (Lunes a Viernes) según `_weekOffset` y carga el menú
   Future<void> _initWeekAndLoad() async {
     final now = DateTime.now();
-    _weekDays = MenuService.getDiasSemana(referenceDate: now);
+    _weekDays = MenuService.getDiasSemana(
+      referenceDate: now,
+      weekOffset: _weekOffset,
+    );
 
-    // Por defecto seleccionar el día actual (o el primer día hábil si es fin de semana)
     final normalizedNow = DateTime(now.year, now.month, now.day);
-    if (now.weekday >= 1 && now.weekday <= 5) {
+    if (_weekOffset == 0 && now.weekday >= 1 && now.weekday <= 5) {
       _selectedDate = normalizedNow;
     } else if (_weekDays.isNotEmpty) {
       _selectedDate = _weekDays.first;
@@ -70,9 +82,32 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     await _loadMenuForDate(_selectedDate);
   }
 
-  /// Carga las excepciones de calendario para la semana actual (HU6)
+  /// Cambia entre la semana actual (0) y la semana siguiente (1)
+  void _changeWeek(int newOffset) {
+    if (_weekOffset == newOffset) return;
+    setState(() {
+      _weekOffset = newOffset;
+      final now = DateTime.now();
+      _weekDays = MenuService.getDiasSemana(
+        referenceDate: now,
+        weekOffset: _weekOffset,
+      );
+      if (_weekOffset == 0 && now.weekday >= 1 && now.weekday <= 5) {
+        _selectedDate = DateTime(now.year, now.month, now.day);
+      } else if (_weekDays.isNotEmpty) {
+        _selectedDate = _weekDays.first;
+      }
+    });
+    _loadWeekExceptions();
+    _loadMenuForDate(_selectedDate);
+  }
+
+  /// Carga las excepciones de calendario para la semana seleccionada (HU6)
   Future<void> _loadWeekExceptions() async {
-    final rango = MenuService.getRangoSemana(referenceDate: _selectedDate);
+    final rango = MenuService.getRangoSemana(
+      referenceDate: DateTime.now(),
+      weekOffset: _weekOffset,
+    );
     final exceptions = await MenuService.getExcepcionesCalendario(
       fechaInicio: MenuService.formatDate(rango.inicioSemana),
       fechaFin: MenuService.formatDate(rango.finSemana),
@@ -114,7 +149,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           _motivoExcepcion = motivo;
           _isMenuDisponible = false;
           _dishes = const [];
-          _dailyMenu = null;
           _isLoading = false;
         });
       }
@@ -127,33 +161,23 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       if (mounted) {
         setState(() {
           _isExcepcionDay = true;
-          _motivoExcepcion =
-              menuResult.motivoExcepcion ?? 'Día de no atención';
+          _motivoExcepcion = menuResult.motivoExcepcion ?? 'Día de no atención';
           _isMenuDisponible = false;
           _dishes = const [];
-          _dailyMenu = null;
           _isLoading = false;
         });
       }
       return;
     }
 
-    // 3. Obtener estructura de menú y platos
-    final structure = await _repository.getDailyMenuStructure(date);
-    final dishes = menuResult.platos.isNotEmpty
-        ? menuResult.platos
-        : structure.allDishes.toSet().toList();
-
-    if (_selectedCategory == 'Postre' && !DailyMenuPolicy.isDessertDay(date)) {
-      _selectedCategory = 'Todos';
-    }
+    // 3. Obtener platos reales del menú del día
+    final dishes = menuResult.platos;
 
     if (mounted) {
       setState(() {
         _isExcepcionDay = false;
         _motivoExcepcion = null;
         _isMenuDisponible = menuResult.isDisponible || dishes.isNotEmpty;
-        _dailyMenu = structure;
         _dishes = dishes;
         _isLoading = false;
       });
@@ -180,51 +204,29 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     }).toList();
   }
 
+  /// Filtro por `plato.tipo` (Sopa, Segundo, Vegetariano).
+  /// Soporta nulos: si es nulo, no coincide con ningún tipo específico ("si es nulo que no muestre nada").
   bool _matchesCategory(Dish dish) {
     if (_selectedCategory == 'Todos') {
       return true;
     }
-    if (_selectedCategory == 'Almuerzo Completo') {
-      return dish.category == 'Sopa' ||
-          dish.category == 'Segundo' ||
-          dish.category == 'Entrada';
+    final tipo = dish.tipo?.trim().toLowerCase();
+    if (tipo == null || tipo.isEmpty) {
+      return false; // Nulo no coincide con filtros de tipo
     }
-    return dish.category.toLowerCase().contains(
-          _selectedCategory.toLowerCase(),
-        );
-  }
-
-  List<Dish> get _selectedDishes {
-    if (_selectedCategory == 'Especial' && _dailyMenu != null) {
-      final especialDishes = _dishes
-          .where((d) => d.category.toLowerCase().contains('especial'))
-          .where(_matchesSearch)
-          .toList();
-      if (especialDishes.isNotEmpty) return especialDishes;
-      return [_dailyMenu!.platoEspecial].where(_matchesSearch).toList();
-    }
-    if (_selectedCategory == 'Vegetariano' && _dailyMenu != null) {
-      final vegDishes = _dishes
-          .where((d) => d.category.toLowerCase().contains('veg'))
-          .where(_matchesSearch)
-          .toList();
-      if (vegDishes.isNotEmpty) return vegDishes;
-      return [_dailyMenu!.platoVegetariano].where(_matchesSearch).toList();
-    }
-    return _filteredDishes;
+    return tipo == _selectedCategory.toLowerCase();
   }
 
   bool _matchesSearch(Dish dish) {
-    final query = _searchQuery.toLowerCase();
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return true;
     return dish.name.toLowerCase().contains(query) ||
-        dish.description.toLowerCase().contains(query);
+        dish.description.toLowerCase().contains(query) ||
+        (dish.tipo != null && dish.tipo!.toLowerCase().contains(query));
   }
 
   @override
   Widget build(BuildContext context) {
-    final isThursday = DailyMenuPolicy.isDessertDay(_selectedDate);
-    final categories = _categories(isThursday);
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -263,22 +265,168 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // 1. Selector semanal Lunes a Viernes (Fórmula solicitada)
-          _buildWeekDaySelector(),
+      body: GestureDetector(
+        // Soporte de deslizamiento táctil horizontal entre semana actual y siguiente
+        onHorizontalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity < -200 && _weekOffset == 0) {
+            // Deslizar a la izquierda -> semana siguiente
+            _changeWeek(1);
+          } else if (velocity > 200 && _weekOffset == 1) {
+            // Deslizar a la derecha -> semana actual
+            _changeWeek(0);
+          }
+        },
+        child: Column(
+          children: [
+            // 1. Selector y Deslizador entre Semana Actual y Siguiente
+            _buildWeekNavigationHeader(),
 
-          // 2. Contenido según estado: Excepción (HU6), No disponible (HU5) o Menú
+            // 2. Selector de días laborales Lunes a Viernes de la semana elegida
+            _buildWeekDaySelector(),
+
+            // 3. Barra de búsqueda rápida
+            _buildSearchBar(),
+
+            // 4. Filtro por categorías según enum `tipo`: ['Todos', 'Segundo', 'Sopa', 'Vegetariano']
+            _buildCategoryFilters(),
+
+            // 5. Contenido según estado: Excepción (HU6), No disponible (HU5) o Menú real
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    )
+                  : _isExcepcionDay
+                  ? _buildExcepcionBanner()
+                  : !_isMenuDisponible
+                  ? _buildMenuNoDisponibleBanner()
+                  : _buildDishesList(_filteredDishes),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Barra de navegación superior para deslizar o alternar entre la semana actual y la siguiente
+  Widget _buildWeekNavigationHeader() {
+    final rango = MenuService.getRangoSemana(
+      referenceDate: DateTime.now(),
+      weekOffset: _weekOffset,
+    );
+    final rangoTexto =
+        '${rango.inicioSemana.day}/${rango.inicioSemana.month} - ${rango.finSemana.day}/${rango.finSemana.month}';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Botón Semana Actual
           Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  )
-                : _isExcepcionDay
-                    ? _buildExcepcionBanner()
-                    : !_isMenuDisponible
-                        ? _buildMenuNoDisponibleBanner()
-                        : _buildMenuContent(categories, isThursday),
+            child: InkWell(
+              onTap: () => _changeWeek(0),
+              borderRadius: BorderRadius.circular(12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: _weekOffset == 0
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.chevron_left,
+                      size: 18,
+                      color: _weekOffset == 0 ? Colors.white : Colors.black87,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Semana Actual',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: _weekOffset == 0
+                            ? FontWeight.bold
+                            : FontWeight.w500,
+                        color: _weekOffset == 0 ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Indicador de rango
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              rangoTexto,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Botón Semana Siguiente
+          Expanded(
+            child: InkWell(
+              onTap: () => _changeWeek(1),
+              borderRadius: BorderRadius.circular(12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: _weekOffset == 1
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Semana Siguiente',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: _weekOffset == 1
+                            ? FontWeight.bold
+                            : FontWeight.w500,
+                        color: _weekOffset == 1 ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: _weekOffset == 1 ? Colors.white : Colors.black87,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -292,11 +440,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     final selectedStr = MenuService.formatDate(_selectedDate);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -325,11 +473,10 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 color: isSelected
                     ? Theme.of(context).colorScheme.primary
                     : (isToday
-                        ? Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withValues(alpha: 0.12)
-                        : Colors.transparent),
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.12)
+                          : Colors.transparent),
                 borderRadius: BorderRadius.circular(14),
                 border: isToday && !isSelected
                     ? Border.all(
@@ -348,13 +495,14 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                         dayNames[index % dayNames.length],
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.w600,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w600,
                           color: isSelected
                               ? Colors.white
                               : (isExcepcion
-                                  ? Colors.red.shade700
-                                  : const Color(0xFF64748B)),
+                                    ? Colors.red.shade700
+                                    : const Color(0xFF64748B)),
                         ),
                       ),
                       if (isExcepcion) ...[
@@ -376,8 +524,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                       color: isSelected
                           ? Colors.white
                           : (isExcepcion
-                              ? Colors.red.shade700
-                              : const Color(0xFF1E293B)),
+                                ? Colors.red.shade700
+                                : const Color(0xFF1E293B)),
                     ),
                   ),
                   if (isToday)
@@ -446,8 +594,10 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               ),
               const SizedBox(height: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.red.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
@@ -463,7 +613,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'El restaurante institucional no prestará servicio de almuerzos en esta fecha en cumplimiento de las excepciones de calendario (HU6).',
+                'El restaurante institucional no prestará servicio de almuerzos en esta fecha.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -538,162 +688,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     );
   }
 
-  /// Contenido principal del menú disponible
-  Widget _buildMenuContent(List<String> categories, bool isThursday) {
-    final showCombos = _selectedCategory == 'Almuerzo Completo' &&
-        _dailyMenu != null &&
-        _dailyMenu!.opcionesAlmuerzo.isNotEmpty;
-    final itemsCount =
-        showCombos ? _dailyMenu!.opcionesAlmuerzo.length : _selectedDishes.length;
-    final hasBanner = _dailyMenu != null;
-
-    return Column(
-      children: [
-        // Barra de búsqueda rápida
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16.0,
-            vertical: 2.0,
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TextField(
-              onChanged: (val) => setState(() => _searchQuery = val),
-              decoration: const InputDecoration(
-                hintText: 'Buscar platos, ingredientes...',
-                prefixIcon: Icon(Icons.search, color: Colors.grey),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 10),
-              ),
-            ),
-          ),
-        ),
-
-        // Filtro por categorías
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-          child: Row(
-            children: categories.map((cat) {
-              final isSelected = _selectedCategory == cat;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8.0),
-                child: FilterChip(
-                  label: Text(
-                    cat,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black87,
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
-                  ),
-                  selected: isSelected,
-                  selectedColor: Theme.of(context).colorScheme.primary,
-                  backgroundColor: Colors.white.withValues(alpha: 0.85),
-                  checkmarkColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  onSelected: (selected) {
-                    setState(() {
-                      _selectedCategory = cat;
-                    });
-                  },
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-
-        // Lista de platos o combos con banner integrado
-        Expanded(
-          child: (itemsCount == 0 && !hasBanner)
-              ? Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    margin: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.restaurant_outlined,
-                          size: 48,
-                          color: Colors.grey,
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          'No se encontraron platos para este filtro.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: () => _loadMenuForDate(_selectedDate),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: itemsCount + (hasBanner ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (hasBanner && index == 0) {
-                        return _buildDailyMenuBanner(isThursday);
-                      }
-                      final itemIdx = hasBanner ? index - 1 : index;
-                      if (itemsCount == 0) {
-                        return Container(
-                          padding: const EdgeInsets.all(16),
-                          margin: const EdgeInsets.only(top: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Text(
-                            'No se encontraron platos para este filtro.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 14, color: Colors.black87),
-                          ),
-                        );
-                      }
-                      if (showCombos) {
-                        return _buildCompleteLunchCard(
-                          _dailyMenu!.opcionesAlmuerzo[itemIdx],
-                          itemIdx,
-                        );
-                      }
-                      return _buildDishCard(_selectedDishes[itemIdx]);
-                    },
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDailyMenuBanner(bool isThursday) {
-    if (_dailyMenu == null) return const SizedBox.shrink();
+  /// Barra de búsqueda rápida
+  Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
       child: Container(
-        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.95),
           borderRadius: BorderRadius.circular(16),
@@ -705,202 +704,113 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.restaurant_menu,
-                  color: Color(0xFF2563EB),
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Menú Diario',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isThursday
-                        ? Colors.purple.withValues(alpha: 0.15)
-                        : Colors.grey.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    isThursday
-                        ? '🍰 Jueves: Postre'
-                        : '🍰 Postres solo jueves',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: isThursday
-                          ? Colors.purple
-                          : Colors.grey.shade700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ..._dailyMenu!.opcionesAlmuerzo.asMap().entries.map(
-                  (entry) => Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Text(
-                      '• Almuerzo Completo ${entry.key + 1}: Entrada (${entry.value.entrada.name}) + Sopa (${entry.value.sopa.name}) + Segundo (${entry.value.segundo.name})',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF334155),
-                      ),
-                    ),
-                  ),
-                ),
-            const SizedBox(height: 2),
-            Text(
-              '• Opción Vegetariana: ${_dailyMenu!.platoVegetariano.name}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF334155),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '• Plato Especial: ${_dailyMenu!.platoEspecial.name}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF334155),
-              ),
-            ),
-          ],
+        child: TextField(
+          onChanged: (val) => setState(() => _searchQuery = val),
+          decoration: const InputDecoration(
+            hintText: 'Buscar platos, ingredientes...',
+            prefixIcon: Icon(Icons.search, color: Colors.grey),
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.symmetric(vertical: 10),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildCompleteLunchCard(AlmuerzoCompleto combo, int index) {
-    final components = [
-      ('Entrada / ensalada', combo.entrada),
-      ('Sopa del día', combo.sopa),
-      ('Segundo', combo.segundo),
-    ];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+  /// Filtro por categorías según enum `tipo`: ['Todos', 'Segundo', 'Sopa', 'Vegetariano']
+  Widget _buildCategoryFilters() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: _categories.map((cat) {
+          final isSelected = _selectedCategory == cat;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: FilterChip(
+              label: Text(
+                cat,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.black87,
+                  fontWeight: isSelected
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                ),
+              ),
+              selected: isSelected,
+              selectedColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: Colors.white.withValues(alpha: 0.85),
+              checkmarkColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              onSelected: (selected) {
+                setState(() {
+                  _selectedCategory = cat;
+                });
+              },
+            ),
+          );
+        }).toList(),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    );
+  }
+
+  /// Lista de platos filtrados
+  Widget _buildDishesList(List<Dish> filtered) {
+    if (filtered.isEmpty) {
+      return Center(
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          margin: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.restaurant_menu,
-                color: Theme.of(context).colorScheme.primary,
+                Icons.restaurant_outlined,
+                size: 48,
+                color: Colors.grey,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Almuerzo Completo ${index + 1}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-              ),
+              SizedBox(height: 12),
               Text(
-                'Bs. ${combo.precio.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
-                ),
+                'No se encontraron platos para este filtro.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: Colors.black87),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          ...components.map(
-            (component) =>
-                _buildComboComponent(label: component.$1, dish: component.$2),
-          ),
-          if (widget.onSelectDishForReservation != null) ...[
-            const Divider(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () =>
-                    widget.onSelectDishForReservation!(combo.segundo),
-                icon: const Icon(Icons.calendar_today, size: 16),
-                label: const Text('Reservar este almuerzo'),
-              ),
-            ),
-          ],
-        ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _loadMenuForDate(_selectedDate),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: filtered.length,
+        itemBuilder: (context, index) {
+          return _buildDishCard(filtered[index]);
+        },
       ),
     );
   }
 
-  Widget _buildComboComponent({required String label, required Dish dish}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          _buildDishImage(
-            dish.imageUrl,
-            width: 58,
-            height: 58,
-            borderRadius: 10,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  dish.name.isNotEmpty ? dish.name : 'Plato del día',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
+  /// Tarjeta de plato del menú
   Widget _buildDishCard(Dish dish) {
+    // Colores para el tipo de plato (si tiene tipo definido)
+    Color tipoColor = const Color(0xFF2563EB);
+    if (dish.tipo?.toLowerCase() == 'sopa') {
+      tipoColor = Colors.amber.shade800;
+    } else if (dish.tipo?.toLowerCase() == 'vegetariano') {
+      tipoColor = Colors.green.shade700;
+    }
+
+    final hasTipo = dish.tipo != null && dish.tipo!.trim().isNotEmpty;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -957,8 +867,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                               dish.isFavorite
                                   ? Icons.favorite
                                   : Icons.favorite_border,
-                              color:
-                                  dish.isFavorite ? Colors.red : Colors.grey,
+                              color: dish.isFavorite ? Colors.red : Colors.grey,
                               size: 22,
                             ),
                             onPressed: () => _toggleFavorite(dish),
@@ -969,7 +878,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                       Text(
                         dish.description.isNotEmpty
                             ? dish.description
-                            : 'Plato registrado en el restaurante.',
+                            : 'Plato registrado en el menú institucional.',
                         style: TextStyle(
                           color: Colors.grey.shade700,
                           fontSize: 12.5,
@@ -980,50 +889,31 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                       ),
                       const SizedBox(height: 8),
 
-                      // Etiquetas (categoría, calorías, precio)
+                      // Etiquetas: tipo (si no es nulo) y precio
                       Wrap(
                         spacing: 6,
                         runSpacing: 4,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              dish.category,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.primary,
+                          // Si el campo tipo es nulo, no se muestra nada (regla de HU)
+                          if (hasTipo)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: tipoColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                dish.tipo!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: tipoColor,
+                                ),
                               ),
                             ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '${dish.calories} kcal',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.orange,
-                              ),
-                            ),
-                          ),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -1050,51 +940,79 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               ],
             ),
           ),
-          if (widget.onSelectDishForReservation != null)
-            Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: Colors.grey.withValues(alpha: 0.15),
-                  ),
-                ),
+          Container(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
               ),
-              child: InkWell(
-                onTap: () => widget.onSelectDishForReservation!(dish),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(24),
-                  bottomRight: Radius.circular(24),
+            ),
+            child: InkWell(
+              onTap: () {
+                if (widget.onSelectDishForReservation != null) {
+                  widget.onSelectDishForReservation!(dish);
+                } else {
+                  _showReservationSheet(dish);
+                }
+              },
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.calendar_today,
-                        size: 16,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.calendar_today,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Reservar este plato',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: Theme.of(context).colorScheme.primary,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Reservar este plato',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
+  }
+
+  /// Modal interactivo de reserva directa (HU7, HU8, HU9)
+  void _showReservationSheet(Dish dish) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ReservationModalContent(
+        dish: dish,
+        date: _selectedDate,
+        reservationPolicy: _reservationPolicy,
+      ),
+    ).then((result) {
+      if (result != true && mounted) {
+        // HU7 criterio: "Dado que el empleado abandona la pantalla sin confirmar,
+        // Cuando cierra la ventana, Entonces el sistema muestra 'Reserva no guardada'."
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reserva no guardada'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    });
   }
 
   /// Construye de manera resiliente la imagen del plato soportando URLs remotas (Supabase Storage),
@@ -1138,20 +1056,20 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 },
                 errorBuilder: (context, error, stackTrace) =>
                     _buildImagePlaceholder(
-                  width: width,
-                  height: height,
-                  borderRadius: borderRadius,
-                ),
+                      width: width,
+                      height: height,
+                      borderRadius: borderRadius,
+                    ),
               )
             : Image.asset(
                 url,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) =>
                     _buildImagePlaceholder(
-                  width: width,
-                  height: height,
-                  borderRadius: borderRadius,
-                ),
+                      width: width,
+                      height: height,
+                      borderRadius: borderRadius,
+                    ),
               ),
       ),
     );
@@ -1216,5 +1134,454 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         ),
       );
     }
+  }
+}
+
+/// Contenido del modal de reserva directa para un plato (HU7, HU8, HU9)
+class _ReservationModalContent extends ConsumerStatefulWidget {
+  final Dish dish;
+  final DateTime date;
+  final ReservationPolicy reservationPolicy;
+
+  const _ReservationModalContent({
+    required this.dish,
+    required this.date,
+    required this.reservationPolicy,
+  });
+
+  @override
+  ConsumerState<_ReservationModalContent> createState() =>
+      _ReservationModalContentState();
+}
+
+class _ReservationModalContentState
+    extends ConsumerState<_ReservationModalContent> {
+  // false = Para mí (Empleado), true = Para un familiar
+  bool _isForFamiliar = false;
+  Familiar? _selectedFamiliar;
+  final TextEditingController _notesController = TextEditingController();
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitReservation() async {
+    final now = DateTime.now();
+
+    // Verificación de política horaria: mismo día después de las 9:00 AM (HU7 / HU9)
+    if (AppDateUtils.isSameDay(widget.date, now) &&
+        (now.hour > 9 || (now.hour == 9 && now.minute > 0))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fuera de horario'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // HU9: Si se eligió reservar para familiar, validar que se seleccione uno
+    if (_isForFamiliar && _selectedFamiliar == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debe seleccionar un familiar'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    final currentUser = ref.read(authProvider);
+    final hasMonthlyPlan = currentUser?.isPensioner ?? false;
+    final tariffPrice = hasMonthlyPlan ? 15.0 : 18.0;
+
+    final beneficiary = _isForFamiliar
+        ? _selectedFamiliar!.displayName
+        : (currentUser?.fullName ?? 'Empleado');
+
+    final success = await ref
+        .read(userReservationsProvider.notifier)
+        .createReservation(
+          date: widget.date,
+          dishId: widget.dish.id,
+          dishName: widget.dish.name,
+          platoPrincipal: widget.dish.name,
+          isAlmuerzoCompleto: false,
+          menuCategory: ReservationMenuCategory.almuerzoCompleto,
+          familiarId: _isForFamiliar ? _selectedFamiliar?.id : null,
+          beneficiaryName: beneficiary,
+          price: tariffPrice,
+          notes: _notesController.text.trim().isNotEmpty
+              ? _notesController.text.trim()
+              : null,
+          userName: currentUser?.fullName ?? 'Empleado',
+          userId: currentUser?.id ?? 'demo-user-123',
+        );
+
+    if (mounted) {
+      setState(() => _isSubmitting = false);
+      if (success) {
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Reserva confirmada para $beneficiary: ${widget.dish.name}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error al procesar la reserva'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUser = ref.watch(authProvider);
+    final familyAsync = ref.watch(employeeFamilyMembersProvider);
+    final familiares = familyAsync.value ?? [];
+
+    final hasMonthlyPlan = currentUser?.isPensioner ?? false;
+    final tariffPrice = hasMonthlyPlan ? 15.0 : 18.0;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.only(
+        top: 20,
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Icon(
+                  Icons.bookmark_add,
+                  color: Color(0xFF2563EB),
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Confirmar Reserva',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    AppDateUtils.formatDate(widget.date),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Resumen del plato
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: 60,
+                      height: 60,
+                      child: widget.dish.imageUrl.startsWith('http')
+                          ? Image.network(
+                              widget.dish.imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(
+                                      Icons.restaurant,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                            )
+                          : Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(
+                                Icons.restaurant,
+                                color: Colors.grey,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.dish.name,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (widget.dish.tipo != null)
+                          Text(
+                            widget.dish.tipo!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Beneficiario: Empleado vs Familiar (HU7 & HU9)
+            const Text(
+              '¿Para quién es la reserva?',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: ChoiceChip(
+                    avatar: const Icon(Icons.person, size: 16),
+                    label: const Text('Para mí'),
+                    selected: !_isForFamiliar,
+                    selectedColor: const Color(
+                      0xFF2563EB,
+                    ).withValues(alpha: 0.15),
+                    onSelected: (val) {
+                      if (val) setState(() => _isForFamiliar = false);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ChoiceChip(
+                    avatar: const Icon(Icons.family_restroom, size: 16),
+                    label: const Text('Para familiar'),
+                    selected: _isForFamiliar,
+                    selectedColor: const Color(
+                      0xFF2563EB,
+                    ).withValues(alpha: 0.15),
+                    onSelected: (val) {
+                      if (val) setState(() => _isForFamiliar = true);
+                    },
+                  ),
+                ),
+              ],
+            ),
+
+            if (_isForFamiliar) ...[
+              const SizedBox(height: 10),
+              if (familiares.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'No tienes familiares registrados. Puedes solicitar su vinculación con el Administrador.',
+                    style: TextStyle(fontSize: 12, color: Colors.orange),
+                  ),
+                )
+              else
+                DropdownButtonFormField<Familiar>(
+                  initialValue: _selectedFamiliar,
+                  decoration: InputDecoration(
+                    labelText: 'Seleccionar familiar',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                  ),
+                  items: familiares.map((f) {
+                    return DropdownMenuItem<Familiar>(
+                      value: f,
+                      child: Text(f.displayName),
+                    );
+                  }).toList(),
+                  onChanged: (fam) => setState(() => _selectedFamiliar = fam),
+                ),
+            ],
+
+            const SizedBox(height: 14),
+
+            // HU8: Campos listos para modalidad mensual y tarifa institucional
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: hasMonthlyPlan
+                    ? Colors.green.shade50
+                    : Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: hasMonthlyPlan
+                      ? Colors.green.shade200
+                      : Colors.blue.shade200,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    hasMonthlyPlan
+                        ? Icons.stars_rounded
+                        : Icons.info_outline_rounded,
+                    color: hasMonthlyPlan
+                        ? Colors.green.shade700
+                        : Colors.blue.shade700,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hasMonthlyPlan
+                              ? '⭐ Modalidad: Pensionado Activo'
+                              : 'Modalidad: Regular',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: hasMonthlyPlan
+                                ? Colors.green.shade900
+                                : Colors.blue.shade900,
+                          ),
+                        ),
+                        Text(
+                          hasMonthlyPlan
+                              ? 'Tarifa reducida por plan mensual: Bs. 15.00'
+                              : 'Tarifa regular: Bs. 18.00 (HU8: Pensionarse para reducir precio)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    'Bs. ${tariffPrice.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: hasMonthlyPlan
+                          ? Colors.green.shade800
+                          : Colors.blue.shade800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Observaciones
+            TextField(
+              controller: _notesController,
+              decoration: InputDecoration(
+                hintText: 'Observaciones (ej. Sin ají, para llevar)',
+                prefixIcon: const Icon(Icons.edit_note),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Botón Confirmar
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _isSubmitting ? null : _submitReservation,
+                icon: _isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.check_circle_outline),
+                label: Text(
+                  _isSubmitting ? 'Confirmando...' : 'Confirmar Reserva',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -123,18 +123,18 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'Asegura tus almuerzos institucionales de lunes a viernes con tarifa preferencial.',
+                          'Asegura tus almuerzos institucionales de lunes a viernes con un mejor precio para usted y su familia.',
                           style: TextStyle(color: Colors.white, fontSize: 13.5),
                         ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            _buildBenefitBadge('Bs. 14 / día', 'Descuento'),
+                            _buildBenefitBadge('Bs. 15 / día', 'Descuento'),
                             const SizedBox(width: 12),
-                            _buildBenefitBadge(
-                              'Garantizado',
-                              'Sin reservas diarias',
-                            ),
+                            // _buildBenefitBadge(
+                            //   'Garantizado',
+                            //   '',
+                            // ),
                           ],
                         ),
                       ],
@@ -185,8 +185,10 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.policy_outlined,
-                                color: Color(0xFF2563EB)),
+                            Icon(
+                              Icons.policy_outlined,
+                              color: Color(0xFF2563EB),
+                            ),
                             SizedBox(width: 8),
                             Text(
                               'Reglas y Políticas de Pensión',
@@ -209,6 +211,10 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
                         _buildPolicyBullet(
                           'Descuento:',
                           'El cobro se procesa vía nómina institucional o tesorería de la entidad.',
+                        ),
+                        _buildPolicyBullet(
+                          'Días Mínimos:',
+                          'Una vez pensionado usted o sus familiares deben consumir un mínimo de 10 almuerzos en el mes, usted puede elegir qué días.',
                         ),
                       ],
                     ),
@@ -284,8 +290,10 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: hasActiveSub
                       ? Colors.green.withValues(alpha: 0.15)
@@ -295,7 +303,9 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
                 child: Text(
                   hasActiveSub ? 'Suscrito' : 'No suscrito',
                   style: TextStyle(
-                    color: hasActiveSub ? Colors.green.shade800 : Colors.grey.shade700,
+                    color: hasActiveSub
+                        ? Colors.green.shade800
+                        : Colors.grey.shade700,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
