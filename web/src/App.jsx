@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth, LoginPage } from './features/auth';
+import { UsuariosPage } from './features/usuarios';
 import Navbar from './components/Navbar';
-import Login from './components/Login';
-import UsuariosList from './components/UsuariosList';
 import NonAdminPortal from './components/NonAdminPortal';
 import MiCuenta from './components/MiCuenta';
 import CrearMenu from './components/CrearMenu';
@@ -60,7 +59,7 @@ function AppContent() {
 
   // Not logged in -> Show Login view
   if (!user) {
-    return <Login />;
+    return <LoginPage />;
   }
 
   // Logged in -> Render Top Navbar + View according to activeTab and role permissions
@@ -71,7 +70,7 @@ function AppContent() {
       <main className="flex-1 pb-16">
         {activeTab === 'usuarios' && (
           isAdmin ? (
-            <UsuariosList />
+            <UsuariosPage />
           ) : (
             <NonAdminPortal setActiveTab={setActiveTab} />
           )
