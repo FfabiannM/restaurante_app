@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth, LoginPage } from './features/auth';
 import { UsuariosPage } from './features/usuarios';
+import { CalendarioPage } from './features/calendario';
 import Navbar from './components/Navbar';
 import NonAdminPortal from './components/NonAdminPortal';
 import MiCuenta from './components/MiCuenta';
 import CrearMenu from './components/CrearMenu';
 import Reportes from './components/Reportes';
-import CalendarioSection from './components/calendario/CalendarioSection';
 import { UtensilsCrossed } from 'lucide-react';
 
 function AppContent() {
@@ -77,7 +77,7 @@ function AppContent() {
         )}
 
         {activeTab === 'portal' && <NonAdminPortal setActiveTab={setActiveTab} />}
-        {activeTab === 'calendario' && <CalendarioSection />}
+        {activeTab === 'calendario' && <CalendarioPage />}
         {activeTab === 'cuenta' && <MiCuenta />}
         {activeTab === 'menu' && <CrearMenu />}
         {activeTab === 'reportes' && <Reportes />}
