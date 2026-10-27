@@ -35,8 +35,15 @@ export function AuthProvider({
         setLoading(true);
         const { user, session } = await getCurrentSessionUseCase.execute();
         if (isMounted) {
-          setCurrentUser(user);
-          setSession(session);
+          if (user && !user.tieneAccesoWeb()) {
+            await logoutUseCase.execute();
+            setCurrentUser(null);
+            setSession(null);
+            setError('Acceso restringido: Los usuarios con rol Empleado no tienen acceso a esta plataforma web.');
+          } else {
+            setCurrentUser(user);
+            setSession(session);
+          }
         }
       } catch (err) {
         console.error('[AuthProvider] Error al inicializar sesión:', err);
@@ -48,10 +55,17 @@ export function AuthProvider({
     initSession();
 
     // Suscripción a cambios de sesión a través del caso de uso
-    const subscription = subscribeUseCase.execute(({ user, session }) => {
+    const subscription = subscribeUseCase.execute(async ({ user, session }) => {
       if (isMounted) {
-        setCurrentUser(user);
-        setSession(session);
+        if (user && !user.tieneAccesoWeb()) {
+          await logoutUseCase.execute();
+          setCurrentUser(null);
+          setSession(null);
+          setError('Acceso restringido: Los usuarios con rol Empleado no tienen acceso a esta plataforma web.');
+        } else {
+          setCurrentUser(user);
+          setSession(session);
+        }
         setLoading(false);
       }
     });

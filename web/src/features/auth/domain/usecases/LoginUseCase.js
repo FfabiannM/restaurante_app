@@ -49,10 +49,21 @@ export class LoginUseCase {
     // 2. Delegar a la abstracción del repositorio
     const result = await this.authRepository.login(cleanEmail, cleanPassword);
 
-    // 3. Regla de negocio adicional: si el usuario existe pero está inactivo, bloquear
+    // 3. Regla de negocio: si el usuario existe pero está inactivo, bloquear
     if (result.user && !result.user.isActivo()) {
       await this.authRepository.logout();
       throw new AppError('Esta cuenta ha sido desactivada. Comuníquese con el administrador.', 'ACCOUNT_INACTIVE_ERROR');
+    }
+
+    // 4. Regla de negocio institucional:
+    // La plataforma web está restringida exclusivamente a roles 'Administrador' e 'Institución'.
+    // Los empleados utilizan la app móvil / canal de reservas y no tienen acceso al portal web administrativo.
+    if (result.user && !result.user.tieneAccesoWeb()) {
+      await this.authRepository.logout();
+      throw new AppError(
+        'Acceso restringido para el encargado.',
+        'ACCESS_DENIED_ERROR'
+      );
     }
 
     return result;

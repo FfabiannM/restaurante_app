@@ -11,7 +11,7 @@ import { UtensilsCrossed } from 'lucide-react';
  * - Conecta el hook useAuth (que consume los casos de uso) con los componentes visuales.
  */
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, error: authContextError } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
 
@@ -55,7 +55,7 @@ export default function LoginPage() {
           <LoginForm 
             onLogin={handleLogin} 
             isLoading={loading} 
-            externalError={loginError} 
+            externalError={loginError || authContextError} 
           />
 
           <div className="mt-6 text-center text-xs text-slate-500">

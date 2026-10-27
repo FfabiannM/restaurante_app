@@ -5,6 +5,7 @@ import {
   aplicarDescuentoManualUseCase,
   generarReporteConsumoMensualUseCase,
   generarReporteDetalleEmpleadoUseCase,
+  getHistorialAsistenciaUseCase,
   supabaseReportesRepository,
 } from '../../di';
 
@@ -42,6 +43,11 @@ export function useReportes() {
   // HU16: Reporte Detallado por Empleado
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState('');
   const [reporteEmpleado, setReporteEmpleado] = useState(null);
+
+  // Registro y Reporte de Asistencias
+  const [asistencias, setAsistencias] = useState([]);
+  const [filtroFechaAsistencia, setFiltroFechaAsistencia] = useState('');
+  const [cargandoAsistencias, setCargandoAsistencias] = useState(false);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ mensaje: msg, type });
@@ -195,6 +201,26 @@ export function useReportes() {
     }
   };
 
+  /**
+   * Cargar tabla de asistencia de los usuarios ordenada por fecha
+   */
+  const cargarHistorialAsistencia = async (params = {}) => {
+    setError(null);
+    try {
+      setCargandoAsistencias(true);
+      const data = await getHistorialAsistenciaUseCase.execute(params);
+      setAsistencias(data || []);
+      return data;
+    } catch (err) {
+      console.error('[useReportes] Error al cargar asistencias:', err);
+      setError(err.message);
+      setAsistencias([]);
+      throw err;
+    } finally {
+      setCargandoAsistencias(false);
+    }
+  };
+
   return {
     mes,
     setMes,
@@ -227,5 +253,12 @@ export function useReportes() {
     setEmpleadoSeleccionado,
     reporteEmpleado,
     generarReporteEmpleado,
+
+    // Asistencias
+    asistencias,
+    cargandoAsistencias,
+    filtroFechaAsistencia,
+    setFiltroFechaAsistencia,
+    cargarHistorialAsistencia,
   };
 }

@@ -58,6 +58,19 @@ export class User {
     return this.rol?.toLowerCase() === 'administrador';
   }
 
+  isInstitucion() {
+    return this.rol?.toLowerCase() === 'institucion';
+  }
+
+  isEmpleado() {
+    return this.rol?.toLowerCase() === 'empleado';
+  }
+
+  tieneAccesoWeb() {
+    const rolLower = this.rol?.toLowerCase();
+    return rolLower === 'administrador' || rolLower === 'institucion';
+  }
+
   isActivo() {
     return Boolean(this.activo);
   }

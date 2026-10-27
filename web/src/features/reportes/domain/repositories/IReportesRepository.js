@@ -56,4 +56,13 @@ export class IReportesRepository {
   async getReporteDetalleEmpleado({ id_usuario, mes, year }) {
     throw new Error('Método getReporteDetalleEmpleado no implementado');
   }
+
+  /**
+   * Obtiene el registro de asistencias de los usuarios ordenado por fecha
+   * @param {{ fechaInicio?: string, fechaFin?: string, id_usuario?: string }} params
+   * @returns {Promise<Array>}
+   */
+  async getHistorialAsistencia(params) {
+    throw new Error('Método getHistorialAsistencia no implementado');
+  }
 }

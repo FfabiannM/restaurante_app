@@ -29,7 +29,7 @@ export default function ReporteMetricasGenerales({ usuarios = [], metricas = {} 
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cuentas Registradas</p>
             <p className="text-2xl font-black text-slate-900 mt-1">{total}</p>
-            <span className="text-[11px] text-emerald-600 font-medium">100% sincronizado con Supabase</span>
+            {/* <span className="text-[11px] text-emerald-600 font-medium">100% sincronizado con Supabase</span> */}
           </div>
           <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
             <Users className="w-6 h-6" />

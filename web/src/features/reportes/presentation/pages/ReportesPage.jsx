@@ -5,6 +5,7 @@ import {
   Building2, 
   UserCheck, 
   PieChart,
+  ClipboardCheck,
   AlertCircle,
   CheckCircle2
 } from 'lucide-react';
@@ -13,6 +14,7 @@ import ReporteDescuentosHU14 from '../components/ReporteDescuentosHU14';
 import ReporteConsumoHU15 from '../components/ReporteConsumoHU15';
 import ReporteEmpleadoHU16 from '../components/ReporteEmpleadoHU16';
 import ReporteMetricasGenerales from '../components/ReporteMetricasGenerales';
+import TablaAsistenciasUsuarios from '../components/TablaAsistenciasUsuarios';
 
 export default function ReportesPage() {
   const [subTab, setSubTab] = useState('hu14'); // 'hu14' | 'hu15' | 'hu16' | 'metricas'
@@ -49,6 +51,11 @@ export default function ReportesPage() {
     setEmpleadoSeleccionado,
     reporteEmpleado,
     generarReporteEmpleado,
+
+    // Asistencias
+    asistencias,
+    cargandoAsistencias,
+    cargarHistorialAsistencia,
   } = useReportes();
 
   return (
@@ -94,14 +101,14 @@ export default function ReportesPage() {
               setSubTab('hu14');
               setError(null);
             }}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-2 ${
               subTab === 'hu14'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
             }`}
           >
             <Calculator className="w-4 h-4" />
-            <span>HU14: Cierre y Descuentos</span>
+            <span>Cierre y Descuentos</span>
           </button>
 
           <button
@@ -109,14 +116,14 @@ export default function ReportesPage() {
               setSubTab('hu15');
               setError(null);
             }}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-2 ${
               subTab === 'hu15'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
             }`}
           >
             <Building2 className="w-4 h-4" />
-            <span>HU15: Consumo Institucional</span>
+            <span>Consumo Institucional</span>
           </button>
 
           <button
@@ -124,14 +131,29 @@ export default function ReportesPage() {
               setSubTab('hu16');
               setError(null);
             }}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-2 ${
               subTab === 'hu16'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
             }`}
           >
             <UserCheck className="w-4 h-4" />
-            <span>HU16: Detalle por Empleado</span>
+            <span>Detalle por Empleado</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setSubTab('asistencias');
+              setError(null);
+            }}
+            className={`px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-2 ${
+              subTab === 'asistencias'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <ClipboardCheck className="w-4 h-4" />
+            <span>Asistencia de Usuarios</span>
           </button>
 
           <button
@@ -139,7 +161,7 @@ export default function ReportesPage() {
               setSubTab('metricas');
               setError(null);
             }}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-2 ${
               subTab === 'metricas'
                 ? 'bg-slate-800 text-white shadow-xs'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
@@ -210,6 +232,15 @@ export default function ReportesPage() {
           setEmpleadoSeleccionado={setEmpleadoSeleccionado}
           reporteEmpleado={reporteEmpleado}
           generarReporteEmpleado={generarReporteEmpleado}
+        />
+      )}
+
+      {subTab === 'asistencias' && (
+        <TablaAsistenciasUsuarios
+          asistencias={asistencias}
+          cargando={cargandoAsistencias}
+          cargarHistorialAsistencia={cargarHistorialAsistencia}
+          usuarios={usuarios}
         />
       )}
 

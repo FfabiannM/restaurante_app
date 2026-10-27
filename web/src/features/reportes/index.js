@@ -9,6 +9,7 @@ export { default as ReporteDescuentosHU14 } from './presentation/components/Repo
 export { default as ReporteConsumoHU15 } from './presentation/components/ReporteConsumoHU15';
 export { default as ReporteEmpleadoHU16 } from './presentation/components/ReporteEmpleadoHU16';
 export { default as ReporteMetricasGenerales } from './presentation/components/ReporteMetricasGenerales';
+export { default as TablaAsistenciasUsuarios } from './presentation/components/TablaAsistenciasUsuarios';
 
 // Dominio - Entidades
 export { CierreMensualEntity } from './domain/entities/CierreMensualEntity';
@@ -26,5 +27,6 @@ export {
   aplicarDescuentoManualUseCase,
   generarReporteConsumoMensualUseCase,
   generarReporteDetalleEmpleadoUseCase,
+  getHistorialAsistenciaUseCase,
   supabaseReportesRepository,
 } from './di';

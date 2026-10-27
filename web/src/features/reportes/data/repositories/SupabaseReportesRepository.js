@@ -439,4 +439,46 @@ export class SupabaseReportesRepository extends IReportesRepository {
       },
     });
   }
+
+  /**
+   * Obtiene la tabla asistencia de los usuarios ordenada por fecha
+   */
+  async getHistorialAsistencia({ fechaInicio, fechaFin, id_usuario } = {}) {
+    let query = this.supabase
+      .from('asistencia')
+      .select('*')
+      .order('fecha', { ascending: false })
+      .order('hora_marcado', { ascending: false });
+
+    if (fechaInicio) query = query.gte('fecha', fechaInicio);
+    if (fechaFin) query = query.lte('fecha', fechaFin);
+    if (id_usuario) query = query.eq('id_usuario', id_usuario);
+
+    const { data: asistencias, error } = await query;
+    if (error) throw error;
+
+    // Obtener información de usuarios para enriquecer con nombre y CI
+    const usuarios = await this.getUsuarios();
+    const userMap = new Map();
+    usuarios.forEach((u) => {
+      userMap.set(u.id_usuario, u);
+    });
+
+    return (asistencias || []).map((a) => {
+      const u = userMap.get(a.id_usuario);
+      return {
+        id_asistencia: a.id_asistencia,
+        id_usuario: a.id_usuario,
+        id_reserva: a.id_reserva,
+        fecha: a.fecha,
+        hora_marcado: a.hora_marcado,
+        asistio: Boolean(a.asistio),
+        observacion: a.observacion || '',
+        creado_en: a.creado_en,
+        empleado_nombre: u ? (u.nombre_completo || `${u.nombre || ''} ${u.apellidos || ''}`.trim()) : 'Usuario no registrado',
+        empleado_ci: u?.ci_codigo || 'N/A',
+        rol: u?.rol || 'Empleado',
+      };
+    });
+  }
 }
