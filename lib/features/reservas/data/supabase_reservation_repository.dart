@@ -380,9 +380,45 @@ class SupabaseReservationRepository implements ReservationRepository {
 
     // 1. Intento primario: Inserción directa en tabla real de Supabase 'reserva'
     try {
+      int? idMenuPlato;
+      if (reservation.dishId != null) {
+        final numericPlatoId = int.tryParse(reservation.dishId!);
+        if (numericPlatoId != null) {
+          try {
+            final dateStr =
+                "${reservation.date.year.toString().padLeft(4, '0')}-${reservation.date.month.toString().padLeft(2, '0')}-${reservation.date.day.toString().padLeft(2, '0')}";
+            final mpRes = await client
+                .from('menu_plato')
+                .select('id_menuplato, menu_dia!inner(fecha)')
+                .eq('id_plato', numericPlatoId)
+                .eq('menu_dia.fecha', dateStr)
+                .maybeSingle();
+            if (mpRes != null && mpRes['id_menuplato'] != null) {
+              idMenuPlato = mpRes['id_menuplato'] as int?;
+            }
+          } catch (_) {}
+
+          if (idMenuPlato == null) {
+            try {
+              final mpDirect = await client
+                  .from('menu_plato')
+                  .select('id_menuplato')
+                  .eq('id_plato', numericPlatoId)
+                  .order('id_menuplato', ascending: false)
+                  .limit(1)
+                  .maybeSingle();
+              if (mpDirect != null && mpDirect['id_menuplato'] != null) {
+                idMenuPlato = mpDirect['id_menuplato'] as int?;
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
       final payloadReservaReal = {
         if (_isUuid(reservation.userId)) 'id_usuario': reservation.userId,
         if (_isUuid(reservation.familiarId)) 'id_familiar': reservation.familiarId,
+        if (idMenuPlato != null) 'id_menu_plato': idMenuPlato,
         'fecha': reservation.date.toUtc().toIso8601String(),
         'costo_aplicado': reservation.price,
         'estado': reservation.status.toUpperCase(),

@@ -34,8 +34,11 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
   List<Dish> _dishesForSelectedDate = [];
   bool _isLoadingDishes = true;
 
-  // Plato seleccionado por el comensal
+  // Plato seleccionado por defecto
   Dish? _selectedDish;
+
+  // Platos independientes por comensal (null = Empleado, famId = Familiar)
+  final Map<String?, Dish> _selectedDishesByComensal = {};
 
   // Filtro por tipo de plato (enum tipo: Sopa, Segundo, Vegetariano, soporta nulos)
   String _selectedTipoFilter = 'Todos';
@@ -201,6 +204,10 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
         // Preseleccionar el primer plato disponible si existe
         if (realDishes.isNotEmpty) {
           _selectedDish = realDishes.first;
+          _selectedDishesByComensal[null] = realDishes.first;
+        } else {
+          _selectedDish = null;
+          _selectedDishesByComensal.clear();
         }
       });
     }
@@ -1329,10 +1336,49 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                 setState(() => _individualFamiliar = f);
               },
             ),
-          ] else ...[
-            // MODO CONJUNTO: Empleado + Familiares seleccionados
+            const SizedBox(height: 12),
             const Text(
-              'Marcar comensales para esta fecha (Límite: 1 por comensal):',
+              'Plato para este comensal:',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<Dish?>(
+              value: _selectedDishesByComensal[_individualFamiliar?.id] ??
+                  _selectedDish,
+              isExpanded: true,
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                prefixIcon: const Icon(Icons.restaurant_menu),
+              ),
+              items: _dishesForSelectedDate.map((d) {
+                return DropdownMenuItem<Dish?>(
+                  value: d,
+                  child: Text(
+                    '${d.name} (${d.tipo ?? "Plato"})',
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              }).toList(),
+              onChanged: (dish) {
+                if (dish != null) {
+                  setState(() {
+                    _selectedDish = dish;
+                    _selectedDishesByComensal[_individualFamiliar?.id] = dish;
+                  });
+                }
+              },
+            ),
+          ] else ...[
+            // MODO CONJUNTO: Empleado + Familiares seleccionados con platos independientes
+            const Text(
+              'Marcar comensales y seleccionar plato para cada uno:',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
             ),
             Material(
@@ -1371,6 +1417,42 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                       },
               ),
             ),
+            if (_includeEmployee && employeeActiveRes == null)
+              Padding(
+                padding: const EdgeInsets.only(left: 8, right: 8, bottom: 10),
+                child: DropdownButtonFormField<Dish?>(
+                  value: _selectedDishesByComensal[null] ?? _selectedDish,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'Plato para el empleado',
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: const Icon(Icons.restaurant_menu, size: 20),
+                  ),
+                  items: _dishesForSelectedDate.map((d) {
+                    return DropdownMenuItem<Dish?>(
+                      value: d,
+                      child: Text(
+                        '${d.name} (${d.tipo ?? "Plato"})',
+                        style: const TextStyle(fontSize: 12.5),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (dish) {
+                    if (dish != null) {
+                      setState(() {
+                        _selectedDishesByComensal[null] = dish;
+                      });
+                    }
+                  },
+                ),
+              ),
             if (familyMembers.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 4.0),
@@ -1385,44 +1467,85 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                 final isChecked =
                     famRes == null && _selectedFamiliarIds.contains(fam.id);
                 final fPrice = familiarTariffs[fam.id] ?? 18.0;
-                return Material(
-                  color: Colors.transparent,
-                  child: CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      famRes != null
-                          ? 'Familiar: ${fam.displayName} (Ya reservado)'
-                          : 'Familiar: ${fam.displayName}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: famRes != null ? Colors.grey.shade600 : null,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Material(
+                      color: Colors.transparent,
+                      child: CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          famRes != null
+                              ? 'Familiar: ${fam.displayName} (Ya reservado)'
+                              : 'Familiar: ${fam.displayName}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: famRes != null ? Colors.grey.shade600 : null,
+                          ),
+                        ),
+                        subtitle: Text(
+                          famRes != null
+                              ? 'Ya cuenta con una reserva activa (${famRes.dishName})'
+                              : 'Tarifa: Bs. ${fPrice.toStringAsFixed(2)} ${fPrice == 15.0 ? "(Pensionado)" : "(Regular)"}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: famRes != null
+                                ? Colors.purple.shade700
+                                : Colors.grey,
+                          ),
+                        ),
+                        value: isChecked,
+                        activeColor: const Color(0xFF2563EB),
+                        onChanged: famRes != null
+                            ? null
+                            : (val) {
+                                setState(() {
+                                  if (val == true) {
+                                    _selectedFamiliarIds.add(fam.id);
+                                  } else {
+                                    _selectedFamiliarIds.remove(fam.id);
+                                  }
+                                });
+                              },
                       ),
                     ),
-                    subtitle: Text(
-                      famRes != null
-                          ? 'Ya cuenta con una reserva activa (${famRes.dishName})'
-                          : 'Tarifa: Bs. ${fPrice.toStringAsFixed(2)} ${fPrice == 15.0 ? "(Pensionado)" : "(Regular)"}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: famRes != null
-                            ? Colors.purple.shade700
-                            : Colors.grey,
-                      ),
-                    ),
-                    value: isChecked,
-                    activeColor: const Color(0xFF2563EB),
-                    onChanged: famRes != null
-                        ? null
-                        : (val) {
-                            setState(() {
-                              if (val == true) {
-                                _selectedFamiliarIds.add(fam.id);
-                              } else {
-                                _selectedFamiliarIds.remove(fam.id);
-                              }
-                            });
+                    if (isChecked)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, right: 8, bottom: 10),
+                        child: DropdownButtonFormField<Dish?>(
+                          value: _selectedDishesByComensal[fam.id] ?? _selectedDish,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            labelText: 'Plato para ${fam.displayName}',
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: const Icon(Icons.restaurant_menu, size: 20),
+                          ),
+                          items: _dishesForSelectedDate.map((d) {
+                            return DropdownMenuItem<Dish?>(
+                              value: d,
+                              child: Text(
+                                '${d.name} (${d.tipo ?? "Plato"})',
+                                style: const TextStyle(fontSize: 12.5),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (dish) {
+                            if (dish != null) {
+                              setState(() {
+                                _selectedDishesByComensal[fam.id] = dish;
+                              });
+                            }
                           },
-                  ),
+                        ),
+                      ),
+                  ],
                 );
               }),
           ],
@@ -1532,7 +1655,9 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Plato: ${_selectedDish?.name ?? "No seleccionado"}',
+                !_isJointReservation
+                    ? 'Plato: ${(_selectedDishesByComensal[_individualFamiliar?.id] ?? _selectedDish)?.name ?? "No seleccionado"}'
+                    : 'Platos: Configurados por comensal',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -1812,11 +1937,28 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
           jointTotal += (familiarTariffs[id] ?? 18.0);
         }
 
+        final Map<String?, String> indDishNames = {};
+        final Map<String?, String> indDishIds = {};
+
+        if (canIncludeEmployee) {
+          final empDish = _selectedDishesByComensal[null] ?? _selectedDish!;
+          indDishNames[null] = empDish.name;
+          indDishIds[null] = empDish.id;
+        }
+
+        for (final famId in eligibleFamiliarIds) {
+          final famDish = _selectedDishesByComensal[famId] ?? _selectedDish!;
+          indDishNames[famId] = famDish.name;
+          indDishIds[famId] = famDish.id;
+        }
+
         final createdCount = await ref
             .read(userReservationsProvider.notifier)
             .createJointReservations(
               date: _selectedDate,
               dishName: dishName,
+              individualDishNames: indDishNames,
+              individualDishIds: indDishIds,
               platoPrincipal: dishName,
               isAlmuerzoCompleto: false,
               menuCategory: ReservationMenuCategory.almuerzoCompleto,
@@ -1834,7 +1976,7 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
           _showReservationConfirmation(
             title: 'Reserva confirmada',
             detail:
-                '$createdCount comensales · $dishName\nTotal: Bs. ${jointTotal.toStringAsFixed(2)}',
+                '$createdCount comensales con platos independientes\nTotal: Bs. ${jointTotal.toStringAsFixed(2)}',
           );
           _notesController.clear();
         }
@@ -1848,13 +1990,16 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
             ? (familiarTariffs[_individualFamiliar!.id] ?? 18.0)
             : employeeTariff;
 
+        final currentDish = _selectedDishesByComensal[_individualFamiliar?.id] ??
+            _selectedDish!;
+
         final success = await ref
             .read(userReservationsProvider.notifier)
             .createReservation(
               date: _selectedDate,
-              dishId: _selectedDish!.id,
-              dishName: dishName,
-              platoPrincipal: dishName,
+              dishId: currentDish.id,
+              dishName: currentDish.name,
+              platoPrincipal: currentDish.name,
               isAlmuerzoCompleto: false,
               menuCategory: ReservationMenuCategory.almuerzoCompleto,
               familiarId: _individualFamiliar?.id,
@@ -1869,7 +2014,7 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
           _showReservationConfirmation(
             title: 'Reserva confirmada',
             detail:
-                '$beneficiary · $dishName\nTotal: Bs. ${singlePrice.toStringAsFixed(2)}',
+                '$beneficiary · ${currentDish.name}\nTotal: Bs. ${singlePrice.toStringAsFixed(2)}',
           );
           _notesController.clear();
         }

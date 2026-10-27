@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restaurante_app/features/admin/domain/admin_employee_entity.dart';
 import 'package:restaurante_app/features/admin/presentation/attendance_admin_tab.dart';
-import 'package:restaurante_app/features/admin/presentation/institucion_screen.dart';
 import 'package:restaurante_app/features/admin/presentation/providers/admin_providers.dart';
+import 'package:restaurante_app/features/descuentos/presentation/descuentos_cierre_screen.dart';
 import 'package:restaurante_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:restaurante_app/features/familiares/domain/familiar_entity.dart';
 import 'package:restaurante_app/features/familiares/domain/family_policy.dart';
@@ -87,7 +87,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             ),
             Tab(icon: Icon(Icons.card_membership_outlined), text: 'Membresías'),
             Tab(icon: Icon(Icons.how_to_reg_outlined), text: 'Asistencia'),
-            Tab(icon: Icon(Icons.analytics_outlined), text: 'Auditoría'),
+            Tab(icon: Icon(Icons.price_change_outlined), text: 'Descuentos y Cobros'),
             Tab(icon: Icon(Icons.lock_reset_outlined), text: 'Solicitudes'),
           ],
         ),
@@ -98,7 +98,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           _buildEmployeesTab(state),
           _buildMembershipsTab(state, currentFilter),
           const AttendanceAdminTab(),
-          const InstitucionScreen(),
+          const DescuentosCierreScreen(),
           _buildPasswordResetRequestsTab(),
         ],
       ),

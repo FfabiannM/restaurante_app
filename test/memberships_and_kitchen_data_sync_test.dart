@@ -10,7 +10,6 @@ import 'package:restaurante_app/features/familiares/domain/familiar_entity.dart'
 import 'package:restaurante_app/features/menu/data/supabase_weekly_menu_repository.dart';
 import 'package:restaurante_app/features/menu/domain/bolivian_dish_entity.dart';
 import 'package:restaurante_app/features/reservas/data/supabase_reservation_repository.dart';
-import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
 
 class MockAdminEmployeesNotifier extends AdminEmployeesNotifier {
   final List<AdminEmployee> initial;

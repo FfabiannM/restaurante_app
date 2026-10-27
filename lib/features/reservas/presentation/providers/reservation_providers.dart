@@ -202,6 +202,8 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
   Future<int> createJointReservations({
     required DateTime date,
     required String dishName,
+    Map<String?, String>? individualDishNames,
+    Map<String?, String>? individualDishIds,
     String? entradaNombre,
     String? platoPrincipal,
     String? sopaNombre,
@@ -250,14 +252,18 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
       final empPrice = individualPrices != null
           ? (individualPrices[null] ?? pricePerPerson)
           : pricePerPerson;
+      final empDishName = individualDishNames?[null] ?? finalDishName;
+      final empDishId = individualDishIds?[null];
+
       final res = Reservation(
         id: const Uuid().v4(),
         userId: userId,
         userName: userName,
         beneficiaryName: userName,
-        dishName: finalDishName,
+        dishId: empDishId,
+        dishName: empDishName,
         entradaNombre: entradaNombre,
-        platoPrincipal: platoPrincipal,
+        platoPrincipal: empDishName,
         sopaNombre: sopaNombre,
         isAlmuerzoCompleto: isAlmuerzoCompleto,
         menuCategory: menuCategory,
@@ -285,15 +291,19 @@ class UserReservationsNotifier extends Notifier<List<Reservation>> {
       final famPrice = individualPrices != null
           ? (individualPrices[famId] ?? pricePerPerson)
           : pricePerPerson;
+      final famDishName = individualDishNames?[famId] ?? finalDishName;
+      final famDishId = individualDishIds?[famId];
+
       final res = Reservation(
         id: const Uuid().v4(),
         userId: userId,
         userName: userName,
         familiarId: famId,
         beneficiaryName: famName,
-        dishName: finalDishName,
+        dishId: famDishId,
+        dishName: famDishName,
         entradaNombre: entradaNombre,
-        platoPrincipal: platoPrincipal,
+        platoPrincipal: famDishName,
         sopaNombre: sopaNombre,
         isAlmuerzoCompleto: isAlmuerzoCompleto,
         menuCategory: menuCategory,

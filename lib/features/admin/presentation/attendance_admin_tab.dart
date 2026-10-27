@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restaurante_app/core/utils/date_utils.dart';
 import 'package:restaurante_app/features/admin/domain/admin_employee_entity.dart';
 import 'package:restaurante_app/features/admin/presentation/providers/admin_providers.dart';
+import 'package:restaurante_app/features/asistencia/presentation/widgets/qr_scanner_dialog.dart';
 import 'package:restaurante_app/features/reservas/domain/reservation_entity.dart';
 import 'package:restaurante_app/features/reservas/presentation/providers/reservation_providers.dart';
 
@@ -278,9 +279,48 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Registro Rápido de Asistencia',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Registro de Asistencia (HU11)',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final result = await QrScannerDialog.show(context);
+                          if (result != null) {
+                            await _loadData();
+                            if (mounted) {
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(result.mensaje),
+                                  backgroundColor:
+                                      result.isSuccess ? Colors.green : Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1E293B),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                        label: const Text(
+                          'Escanear QR',
+                          style: TextStyle(fontSize: 12.5),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   const Text(
