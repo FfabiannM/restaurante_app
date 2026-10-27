@@ -108,9 +108,29 @@ class SupabaseAuthRepository {
       return _mockSignIn(email);
     }
 
+    final cleanEmail = email.trim().toLowerCase();
+
+    // 1. Verificar bloqueo por intentos fallidos en el backend (Supabase RPC)
+    try {
+      final lockoutRes = await client.rpc('check_login_lockout', params: {
+        'p_email': cleanEmail,
+      });
+
+      if (lockoutRes is Map && lockoutRes['bloqueado'] == true) {
+        final mins = lockoutRes['minutos_restantes'] ?? 5;
+        throw AuthException(
+          'Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intente nuevamente en $mins minuto${mins > 1 ? 's' : ''}.',
+        );
+      }
+    } on AuthException {
+      rethrow;
+    } catch (e) {
+      debugPrint('⚠️ Error al verificar estado de bloqueo: $e');
+    }
+
     try {
       final authRes = await client.auth.signInWithPassword(
-        email: email.trim(),
+        email: cleanEmail,
         password: password,
       );
 
@@ -119,10 +139,19 @@ class SupabaseAuthRepository {
         throw Exception('Supabase no devolvió el usuario autenticado.');
       }
 
+      // Restablecer contador de intentos en Supabase RPC tras éxito
+      try {
+        await client.rpc('record_login_success', params: {
+          'p_email': cleanEmail,
+        });
+      } catch (e) {
+        debugPrint('⚠️ Error restableciendo intentos de login: $e');
+      }
+
       final profile = await _loadRemoteProfile(
         client,
         userId: user.id,
-        email: user.email ?? email,
+        email: user.email ?? cleanEmail,
       );
 
       if (profile != null) {
@@ -139,7 +168,7 @@ class SupabaseAuthRepository {
       // Si no existe fila en vista_usuarios, usar metadatos como respaldo
       final fallbackProfile = UserProfile(
         id: user.id,
-        email: user.email ?? email,
+        email: user.email ?? cleanEmail,
         fullName: user.userMetadata?['nombre_completo'] ??
             user.userMetadata?['full_name'] ??
             'Usuario',
@@ -153,9 +182,37 @@ class SupabaseAuthRepository {
       debugPrint(
         '⚠️ Supabase Auth no está disponible ($e). Usando sesión local temporal.',
       );
-      return _mockSignIn(email);
-    } on AuthApiException catch (e) {
+      return _mockSignIn(cleanEmail);
+    } on AuthException catch (e) {
       debugPrint('⚠️ Falló login remoto en Supabase ($e).');
+
+      // Registrar intento fallido en backend si no es por bloqueo ya existente
+      if (!e.message.contains('Cuenta bloqueada')) {
+        try {
+          final failRes = await client.rpc('record_login_failure', params: {
+            'p_email': cleanEmail,
+          });
+
+          if (failRes is Map) {
+            if (failRes['bloqueado'] == true) {
+              final mins = failRes['minutos_restantes'] ?? 5;
+              throw AuthException(
+                'Ha superado los 3 intentos fallidos permitidos. Su cuenta ha sido bloqueada por $mins minutos.',
+              );
+            } else {
+              final intentos = failRes['intentos_fallidos'] ?? 1;
+              final restantes = (3 - (intentos as num).toInt()).clamp(0, 3);
+              throw AuthException(
+                'Credenciales inválidas. Intento $intentos de 3. Le queda${restantes == 1 ? '' : 'n'} $restantes intento${restantes == 1 ? '' : 's'}.',
+              );
+            }
+          }
+        } on AuthException {
+          rethrow;
+        } catch (rpcErr) {
+          debugPrint('⚠️ Error registrando fallo en Supabase: $rpcErr');
+        }
+      }
       rethrow;
     } catch (e) {
       debugPrint('⚠️ Falló login remoto en Supabase ($e).');

@@ -83,18 +83,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (!ok) {
-        final error = ref.read(authProvider.notifier).lastError ?? '';
-        final message =
-            error.contains('email_not_confirmed') ||
-                error.contains('Email not confirmed')
-            ? 'Tu correo aún no está confirmado. Revisa tu bandeja de entrada o solicita al administrador que confirme la cuenta.'
-            : error.contains('email_provider_disabled')
-            ? 'No se puede consultar la base de datos porque el proveedor Email está deshabilitado en Supabase. Habilítalo en Authentication > Providers.'
-            : error.contains('no tiene un perfil')
-            ? 'La cuenta existe, pero no tiene un perfil asociado en Supabase. Registra el perfil del usuario y vuelve a intentar.'
-            : 'Error al iniciar sesión. Revisa tus credenciales.';
+        final rawError = ref.read(authProvider.notifier).lastError ?? '';
+        final cleanError = rawError
+            .replaceFirst(RegExp(r'^(Exception|AuthException):\s*'), '')
+            .trim();
+
+        final String message;
+        if (cleanError.contains('bloqueada') ||
+            cleanError.contains('bloqueado') ||
+            cleanError.contains('intentos') ||
+            cleanError.contains('Intento') ||
+            cleanError.contains('desactivada')) {
+          message = cleanError;
+        } else if (cleanError.contains('email_not_confirmed') ||
+            cleanError.contains('Email not confirmed')) {
+          message =
+              'Tu correo aún no está confirmado. Revisa tu bandeja de entrada o solicita al administrador que confirme la cuenta.';
+        } else if (cleanError.contains('email_provider_disabled')) {
+          message =
+              'No se puede consultar la base de datos porque el proveedor Email está deshabilitado en Supabase. Habilítalo en Authentication > Providers.';
+        } else if (cleanError.contains('no tiene un perfil')) {
+          message =
+              'La cuenta existe, pero no tiene un perfil asociado en Supabase. Registra el perfil del usuario y vuelve a intentar.';
+        } else if (cleanError.isNotEmpty) {
+          message = cleanError;
+        } else {
+          message = 'Error al iniciar sesión. Revisa tus credenciales.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     }

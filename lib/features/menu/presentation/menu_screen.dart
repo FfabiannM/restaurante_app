@@ -896,18 +896,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                               ),
                             ),
                           ),
-                          IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            icon: Icon(
-                              dish.isFavorite
-                                  ? Icons.favorite
-                                  : Icons.favorite_border,
-                              color: dish.isFavorite ? Colors.red : Colors.grey,
-                              size: 22,
-                            ),
-                            onPressed: () => _toggleFavorite(dish),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -1405,7 +1393,8 @@ class _ReservationModalContentState
       widget.date.day,
     );
     final isPast = targetNormalized.isBefore(todayNormalized);
-    final isAfterCutoff = AppDateUtils.isSameDay(widget.date, now) &&
+    final isAfterCutoff =
+        AppDateUtils.isSameDay(widget.date, now) &&
         (now.hour > 9 || (now.hour == 9 && now.minute > 0));
 
     final allReservations = ref.watch(userReservationsProvider);
@@ -1783,9 +1772,12 @@ class _ReservationModalContentState
               height: 48,
               child: ElevatedButton.icon(
                 onPressed:
-                    (_isSubmitting || isPast || isAfterCutoff || alreadyReserved)
-                        ? null
-                        : _submitReservation,
+                    (_isSubmitting ||
+                        isPast ||
+                        isAfterCutoff ||
+                        alreadyReserved)
+                    ? null
+                    : _submitReservation,
                 icon: _isSubmitting
                     ? const SizedBox(
                         width: 18,
@@ -1818,10 +1810,9 @@ class _ReservationModalContentState
                   ),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      (isPast || isAfterCutoff || alreadyReserved)
-                          ? Colors.grey.shade400
-                          : const Color(0xFF2563EB),
+                  backgroundColor: (isPast || isAfterCutoff || alreadyReserved)
+                      ? Colors.grey.shade400
+                      : const Color(0xFF2563EB),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),

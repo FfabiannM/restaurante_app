@@ -19,16 +19,68 @@ export class SupabaseAuthRepository extends IAuthRepository {
   }
 
   async login(email, password) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+
+    // 1. Verificar bloqueo por intentos fallidos en el backend (Supabase RPC)
+    try {
+      const { data: lockoutCheck, error: lockoutErr } = await this.client.rpc('check_login_lockout', {
+        p_email: cleanEmail,
+      });
+
+      if (!lockoutErr && lockoutCheck?.bloqueado) {
+        const mins = lockoutCheck.minutos_restantes || 5;
+        throw new AuthenticationError(
+          `Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intente nuevamente en ${mins} minuto${mins > 1 ? 's' : ''}.`
+        );
+      }
+    } catch (err) {
+      if (err instanceof AuthenticationError) throw err;
+      console.warn('[SupabaseAuthRepository] Error al verificar estado de bloqueo:', err);
+    }
+
+    // 2. Intentar autenticación con Supabase Auth
     const { data, error } = await this.client.auth.signInWithPassword({
-      email,
+      email: cleanEmail,
       password,
     });
 
     if (error) {
-      if (error.message?.includes('Invalid login credentials')) {
-        throw new AuthenticationError('Credenciales inválidas. Revise su correo y contraseña.');
+      // Registrar intento fallido en Supabase RPC
+      let failureInfo = null;
+      try {
+        const { data: failRes } = await this.client.rpc('record_login_failure', {
+          p_email: cleanEmail,
+        });
+        failureInfo = failRes;
+      } catch (rpcErr) {
+        console.warn('[SupabaseAuthRepository] Error al registrar intento fallido:', rpcErr);
       }
+
+      if (failureInfo?.bloqueado) {
+        const mins = failureInfo.minutos_restantes || 5;
+        throw new AuthenticationError(
+          `Ha superado los 3 intentos fallidos permitidos. Su cuenta ha sido bloqueada por ${mins} minutos.`
+        );
+      }
+
+      if (error.message?.includes('Invalid login credentials')) {
+        const intentos = failureInfo?.intentos_fallidos || 1;
+        const restantes = Math.max(0, 3 - intentos);
+        throw new AuthenticationError(
+          `Credenciales inválidas. Intento ${intentos} de 3. Le queda${restantes === 1 ? '' : 'n'} ${restantes} intento${restantes === 1 ? '' : 's'}.`
+        );
+      }
+
       throw new AuthenticationError(error.message, error);
+    }
+
+    // 3. Inicio exitoso: restablecer contador de intentos en Supabase RPC
+    try {
+      await this.client.rpc('record_login_success', {
+        p_email: cleanEmail,
+      });
+    } catch (rpcErr) {
+      console.warn('[SupabaseAuthRepository] Error al restablecer intentos de login:', rpcErr);
     }
 
     const profile = await this.getProfile(data.user.id);

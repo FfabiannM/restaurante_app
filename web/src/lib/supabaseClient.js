@@ -7,13 +7,56 @@ export { supabase, supabaseUrl, supabaseAnonKey };
  * Inicio de sesión usando la función nativa de supabase-js
  */
 export async function loginWithEmail(email, password) {
+  const cleanEmail = (email || '').trim().toLowerCase();
+
+  // 1. Verificar bloqueo por intentos fallidos en el backend
+  try {
+    const { data: lockoutCheck, error: lockoutErr } = await supabase.rpc('check_login_lockout', {
+      p_email: cleanEmail,
+    });
+    if (!lockoutErr && lockoutCheck?.bloqueado) {
+      const mins = lockoutCheck.minutos_restantes || 5;
+      throw new Error(`Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intente nuevamente en ${mins} minuto${mins > 1 ? 's' : ''}.`);
+    }
+  } catch (err) {
+    if (err.message?.includes('Cuenta bloqueada')) throw err;
+    console.warn('Error al verificar bloqueo:', err);
+  }
+
   const { data, error } = await supabase.auth.signInWithPassword({
-    email,
+    email: cleanEmail,
     password,
   });
 
   if (error) {
+    let failureInfo = null;
+    try {
+      const { data: failRes } = await supabase.rpc('record_login_failure', {
+        p_email: cleanEmail,
+      });
+      failureInfo = failRes;
+    } catch (rpcErr) {
+      console.warn('Error al registrar fallo de login:', rpcErr);
+    }
+
+    if (failureInfo?.bloqueado) {
+      const mins = failureInfo.minutos_restantes || 5;
+      throw new Error(`Ha superado los 3 intentos fallidos permitidos. Su cuenta ha sido bloqueada por ${mins} minutos.`);
+    }
+
+    if (error.message?.includes('Invalid login credentials')) {
+      const intentos = failureInfo?.intentos_fallidos || 1;
+      const restantes = Math.max(0, 3 - intentos);
+      throw new Error(`Credenciales inválidas. Intento ${intentos} de 3. Le queda${restantes === 1 ? '' : 'n'} ${restantes} intento${restantes === 1 ? '' : 's'}.`);
+    }
     throw error;
+  }
+
+  // Éxito: restablecer intentos
+  try {
+    await supabase.rpc('record_login_success', { p_email: cleanEmail });
+  } catch (rpcErr) {
+    console.warn('Error al restablecer intentos de login:', rpcErr);
   }
 
   // Obtener perfil complementario desde la vista creada vista_usuarios
