@@ -5,8 +5,8 @@ import { CalendarioPage } from './features/calendario';
 import { MenuPage } from './features/menu';
 import Navbar from './components/Navbar';
 import NonAdminPortal from './components/NonAdminPortal';
-import MiCuenta from './components/MiCuenta';
-import Reportes from './components/Reportes';
+import { MiCuentaPage } from './features/cuenta';
+import { ReportesPage } from './features/reportes';
 import { UtensilsCrossed } from 'lucide-react';
 
 function AppContent() {
@@ -78,9 +78,9 @@ function AppContent() {
 
         {activeTab === 'portal' && <NonAdminPortal setActiveTab={setActiveTab} />}
         {activeTab === 'calendario' && <CalendarioPage />}
-        {activeTab === 'cuenta' && <MiCuenta />}
+        {activeTab === 'cuenta' && <MiCuentaPage />}
         {activeTab === 'menu' && <MenuPage />}
-        {activeTab === 'reportes' && <Reportes />}
+        {activeTab === 'reportes' && <ReportesPage />}
       </main>
 
       {/* Footer */}
