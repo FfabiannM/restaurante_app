@@ -97,6 +97,7 @@ class Reservation {
   bool get isCancelled => status.toLowerCase() == 'cancelada';
   bool get isDelivered => status.toLowerCase() == 'entregada';
   bool get isForFamiliar => familiarId != null;
+  bool get isPension => type.toLowerCase() == 'pension' || price <= 15.0;
 
   String get displayName => beneficiaryName ?? userName;
 

@@ -186,6 +186,21 @@ class SupabasePensionRepository {
           'modalidad': 'Pensionado',
         });
       }
+
+      // Auto-generación de reservas para todos los días laborales del mes en Supabase
+      if (_isUuid(userId)) {
+        try {
+          await client.rpc('generar_reservas_pension', params: {
+            'p_id_usuario': userId,
+            'p_id_familiar': familiarId,
+            'p_year': year,
+            'p_mes': month,
+          });
+        } catch (eRpc) {
+          debugPrint('ℹ️ RPC generar_reservas_pension: $eRpc');
+        }
+      }
+
       return true;
     } catch (e) {
       debugPrint('⚠️ Error al registrar pensión en Supabase: $e');
@@ -244,11 +259,32 @@ class SupabasePensionRepository {
         }
         await query;
       }
+
+      if (userId != null && _isUuid(userId)) {
+        try {
+          await client.rpc('cancelar_reservas_pension', params: {
+            'p_id_usuario': userId,
+            'p_id_familiar': familiarId,
+            'p_year': year,
+            'p_mes': month,
+          });
+        } catch (eCancelRpc) {
+          debugPrint('ℹ️ RPC cancelar_reservas_pension: $eCancelRpc');
+        }
+      }
+
       return true;
     } catch (e) {
       debugPrint('⚠️ Error al cancelar pensión en Supabase: $e');
       return true;
     }
+  }
+
+  bool _isUuid(String? value) {
+    if (value == null) return false;
+    return RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+    ).hasMatch(value);
   }
 
   /// Verifica si un comensal (empleado o familiar) tiene pensión activa en una fecha

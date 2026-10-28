@@ -24,10 +24,10 @@ export default function UsuarioRow({
   return (
     <tr className="hover:bg-slate-50/80 transition-colors duration-150 group">
       {/* Name with Avatar */}
-      <td className="py-3.5 px-4 sm:px-6">
-        <div className="flex items-center space-x-3">
+      <td className="py-3.5 px-4 sm:px-6 overflow-hidden">
+        <div className="flex items-center space-x-3 min-w-0">
           <div
-            className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-xs ${
+            className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center font-bold text-xs shadow-xs ${
               user.rol === 'Administrador'
                 ? 'bg-purple-100 text-purple-700 border border-purple-200'
                 : user.rol === 'Institucion'
@@ -37,11 +37,13 @@ export default function UsuarioRow({
           >
             {initials}
           </div>
-          <div>
-            <div className="flex items-center">
-              <span className="font-semibold text-slate-900 block">{fullName}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center space-x-1.5">
+              <span className="font-semibold text-slate-900 truncate block" title={fullName}>
+                {fullName}
+              </span>
               {hasPendingPasswordRequest && (
-                <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 animate-pulse" />
                   Pide clave
                 </span>
@@ -52,29 +54,29 @@ export default function UsuarioRow({
       </td>
 
       {/* CI / Código */}
-      <td className="py-3.5 px-4">
-        <span className="inline-flex items-center font-mono text-xs bg-slate-100 px-2 py-1 rounded-md text-slate-700 font-medium">
+      <td className="py-3.5 px-4 whitespace-nowrap overflow-hidden">
+        <span className="inline-flex items-center font-mono text-xs bg-slate-100 px-2 py-1 rounded-md text-slate-700 font-medium truncate max-w-full">
           {user.ci_codigo || 'N/A'}
         </span>
       </td>
 
       {/* Teléfono */}
-      <td className="py-3.5 px-4">
-        <span className="text-slate-600 font-medium">{user.telefono || '—'}</span>
+      <td className="py-3.5 px-4 whitespace-nowrap overflow-hidden">
+        <span className="text-slate-600 font-medium truncate block">{user.telefono || '—'}</span>
       </td>
 
       {/* Correo Electrónico */}
-      <td className="py-3.5 px-4">
-        <span className="text-slate-600 font-mono text-xs">{user.email}</span>
+      <td className="py-3.5 px-4 whitespace-nowrap overflow-hidden">
+        <span className="text-slate-600 font-mono text-xs truncate block" title={user.email}>{user.email}</span>
       </td>
 
       {/* Rol */}
-      <td className="py-3.5 px-4">
+      <td className="py-3.5 px-4 whitespace-nowrap">
         <UsuarioRoleBadge rol={user.rol} />
       </td>
 
       {/* Estado */}
-      <td className="py-3.5 px-4">
+      <td className="py-3.5 px-4 whitespace-nowrap">
         {isUserActive ? (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse" /> Activo
@@ -87,37 +89,37 @@ export default function UsuarioRow({
       </td>
 
       {/* Acciones */}
-      <td className="py-3.5 px-4 sm:px-6 text-right">
-        <div className="flex items-center justify-end space-x-1.5">
+      <td className="py-3.5 px-4 sm:px-6 text-right whitespace-nowrap">
+        <div className="inline-flex items-center justify-end gap-1.5">
           {/* Familiares (solo para empleados) */}
-          {user.rol === 'Empleado' && (
+          {user.rol === 'Empleado' ? (
             <button
               type="button"
               onClick={() => onManageFamiliares?.(user)}
-              className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition flex items-center space-x-1"
+              className="px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-medium transition flex items-center space-x-1 shrink-0"
               title="Gestionar familiares"
             >
               <Users className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Familiares</span>
+              <span className="hidden xl:inline">Familiares</span>
             </button>
-          )}
+          ) : null}
 
           {/* Ver Detalles */}
           <button
             type="button"
             onClick={() => onSelectDetails(user)}
-            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition flex items-center space-x-1"
+            className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-medium transition flex items-center space-x-1 shrink-0"
             title="Ver detalles"
           >
             <Eye className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Detalles</span>
+            <span className="hidden xl:inline">Detalles</span>
           </button>
 
           {/* Cambiar contraseña */}
           <button
             type="button"
             onClick={() => onRequestChangePassword(user)}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1 ${
+            className={`px-2 py-1.5 rounded-lg text-xs font-medium transition flex items-center space-x-1 shrink-0 ${
               hasPendingPasswordRequest
                 ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-xs'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -125,7 +127,7 @@ export default function UsuarioRow({
             title={hasPendingPasswordRequest ? 'Usuario solicitó nueva contraseña' : 'Cambiar contraseña'}
           >
             <KeyRound className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">{hasPendingPasswordRequest ? 'Atender Clave' : 'Clave'}</span>
+            <span className="hidden xl:inline">{hasPendingPasswordRequest ? 'Atender Clave' : 'Clave'}</span>
           </button>
 
           {/* Anular acceso / Activar */}
@@ -133,7 +135,7 @@ export default function UsuarioRow({
             type="button"
             onClick={() => onToggleStatus(user)}
             disabled={isLoadingAction}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1 ${
+            className={`px-2 py-1.5 rounded-lg text-xs font-medium transition flex items-center space-x-1 shrink-0 ${
               isUserActive
                 ? 'bg-rose-50 hover:bg-rose-100 text-rose-700'
                 : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
@@ -143,25 +145,15 @@ export default function UsuarioRow({
             {isUserActive ? (
               <>
                 <UserX className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Anular acceso</span>
+                <span className="hidden xl:inline">Anular</span>
               </>
             ) : (
               <>
                 <UserCheck className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Activar</span>
+                <span className="hidden xl:inline">Activar</span>
               </>
             )}
           </button>
-
-          {/* Eliminar permanente 
-          <button
-            type="button"
-            onClick={() => onDeleteClick(user)}
-            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-            title="Eliminar usuario"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>*/}
         </div>
       </td>
     </tr>

@@ -178,7 +178,7 @@ export default function MenuSemanalModal({
     }
   };
 
-  // Alternar selección de un plato para el día activo
+  // Seleccionar plato único para el día activo (ahora 1 plato por día)
   const togglePlatoForActiveDay = (platoId) => {
     const activeDateStr = weekDays[activeDayIndex]?.dateStr;
     if (!activeDateStr) return;
@@ -186,9 +186,8 @@ export default function MenuSemanalModal({
     setSelectedPlatosByDate((prev) => {
       const currentList = Array.from(new Set(prev[activeDateStr] || []));
       const exists = currentList.some((id) => String(id) === String(platoId));
-      const updated = exists
-        ? currentList.filter((id) => String(id) !== String(platoId))
-        : [...currentList, platoId];
+      // Si ya estaba seleccionado, se quita; si no, reemplaza a cualquier otro
+      const updated = exists ? [] : [platoId];
 
       return {
         ...prev,

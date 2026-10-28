@@ -8,10 +8,12 @@ class DescuentosCierreScreen extends ConsumerStatefulWidget {
   const DescuentosCierreScreen({super.key});
 
   @override
-  ConsumerState<DescuentosCierreScreen> createState() => _DescuentosCierreScreenState();
+  ConsumerState<DescuentosCierreScreen> createState() =>
+      _DescuentosCierreScreenState();
 }
 
-class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen> {
+class _DescuentosCierreScreenState
+    extends ConsumerState<DescuentosCierreScreen> {
   int? _selectedMes = DateTime.now().month;
   int? _selectedYear = DateTime.now().year;
 
@@ -56,10 +58,7 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
       if (mounted) {
         final errorMsg = e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMsg),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
         );
       }
     }
@@ -89,12 +88,15 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
 
   Future<void> _guardarCierre() async {
     try {
-      final res =
-          await ref.read(descuentosNotifierProvider.notifier).guardarCierre();
+      final res = await ref
+          .read(descuentosNotifierProvider.notifier)
+          .guardarCierre();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(res['mensaje']?.toString() ?? 'Cierre guardado exitosamente.'),
+            content: Text(
+              res['mensaje']?.toString() ?? 'Cierre guardado exitosamente.',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -144,7 +146,9 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                          color: const Color(
+                            0xFF2563EB,
+                          ).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
@@ -159,7 +163,7 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Reporte de Descuentos y Cobros (HU12)',
+                              'Reporte de Descuentos y Cobros',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -168,7 +172,10 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                             ),
                             Text(
                               'Cierre mensual, validación de antigüedad y tarifas',
-                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
                             ),
                           ],
                         ),
@@ -206,7 +213,8 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                               ),
                             ),
                           ],
-                          onChanged: (val) => setState(() => _selectedMes = val),
+                          onChanged: (val) =>
+                              setState(() => _selectedMes = val),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -236,7 +244,8 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                               ),
                             ),
                           ],
-                          onChanged: (val) => setState(() => _selectedYear = val),
+                          onChanged: (val) =>
+                              setState(() => _selectedYear = val),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -309,7 +318,10 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                     Text(
                       'Seleccione un período (mes y año) y presione el botón "Generar" para calcular cobros, tarifas de pensión y reglas de antigüedad.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ),
@@ -321,7 +333,8 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                   Expanded(
                     child: _buildMetricCard(
                       label: 'Total a Descontar',
-                      value: 'Bs. ${(state.cierre?.totalGeneral ?? 0.0).toStringAsFixed(2)}',
+                      value:
+                          'Bs. ${(state.cierre?.totalGeneral ?? 0.0).toStringAsFixed(2)}',
                       icon: Icons.attach_money,
                       color: Colors.green.shade700,
                     ),
@@ -330,7 +343,8 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                   Expanded(
                     child: _buildMetricCard(
                       label: 'Pensionados (Bs. 15)',
-                      value: '${state.detalles.where((d) => d.tipoReserva == "pension").length}',
+                      value:
+                          '${state.detalles.where((d) => d.tipoReserva == "pension").length}',
                       icon: Icons.stars_rounded,
                       color: Colors.blue.shade700,
                     ),
@@ -339,7 +353,8 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                   Expanded(
                     child: _buildMetricCard(
                       label: 'Regulares (Bs. 18)',
-                      value: '${state.detalles.where((d) => d.tipoReserva != "pension").length}',
+                      value:
+                          '${state.detalles.where((d) => d.tipoReserva != "pension").length}',
                       icon: Icons.person_outline,
                       color: Colors.amber.shade800,
                     ),
@@ -365,7 +380,10 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                       SizedBox(width: 10),
                       Text(
                         'Este cierre mensual ya fue guardado y cerrado en Supabase.',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
                       ),
                     ],
                   ),
@@ -462,7 +480,10 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                         const SizedBox(height: 4),
                         Text(
                           'CI: ${detalle.empleadoCi} · Antigüedad: ${detalle.antiguedadMeses} mes(es) · ${detalle.cumpleAntiguedad ? "Cumple antigüedad mínima" : "Sin descuento de antigüedad"}',
-                          style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: Colors.grey.shade700,
+                          ),
                         ),
                         const Divider(height: 16),
                         Row(
@@ -503,7 +524,9 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                                       detalle.estadoDescuento,
                                       style: TextStyle(
                                         fontSize: 10.5,
-                                        color: detalle.estadoDescuento == 'Aprobado'
+                                        color:
+                                            detalle.estadoDescuento ==
+                                                'Aprobado'
                                             ? Colors.green
                                             : Colors.grey,
                                       ),
@@ -512,7 +535,7 @@ class _DescuentosCierreScreenState extends ConsumerState<DescuentosCierreScreen>
                                 ),
                                 const SizedBox(width: 8),
                                 IconButton(
-                                  tooltip: 'Modificar descuento manualmente (HU12)',
+                                  tooltip: 'Modificar descuento manualmente',
                                   icon: const Icon(
                                     Icons.edit_note,
                                     color: Color(0xFF2563EB),

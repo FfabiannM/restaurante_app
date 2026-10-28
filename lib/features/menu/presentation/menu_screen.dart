@@ -116,12 +116,15 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
     if (mounted) {
       setState(() {
-        _excepcionesFechas = exceptions
+        final activeExceptions = exceptions
+            .where((e) => e['is_activo'] != false)
+            .toList();
+        _excepcionesFechas = activeExceptions
             .map((e) => e['fecha']?.toString() ?? '')
             .where((s) => s.isNotEmpty)
             .toSet();
         _excepcionesMotivos = {
-          for (final e in exceptions)
+          for (final e in activeExceptions)
             if (e['fecha'] != null)
               e['fecha'].toString():
                   e['motivo']?.toString() ?? 'Día de no atención',
@@ -715,7 +718,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'El menú para esta fecha aún no ha sido cargado o publicado por el encargado del restaurante (HU5).',
+                'El menú para esta fecha aún no ha sido cargado o publicado por el encargado del restaurante.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -896,6 +899,18 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                               ),
                             ),
                           ),
+                          IconButton(
+                            icon: Icon(
+                              dish.isFavorite
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: dish.isFavorite ? Colors.red : Colors.grey,
+                              size: 20,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () => _toggleFavorite(dish),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -1017,6 +1032,16 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                     _selectedDate.day,
                   );
                   final isPast = selectedNormalized.isBefore(todayNormalized);
+                  final allUserReservations = ref.watch(
+                    userReservationsProvider,
+                  );
+                  final existingRes = allUserReservations
+                      .where(
+                        (r) =>
+                            AppDateUtils.isSameDay(r.date, _selectedDate) &&
+                            r.status.toLowerCase() != 'cancelada',
+                      )
+                      .firstOrNull;
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(
@@ -1029,23 +1054,31 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                         Icon(
                           isPast
                               ? Icons.history_toggle_off
-                              : Icons.calendar_today,
+                              : (existingRes != null
+                                    ? Icons.check_circle
+                                    : Icons.calendar_today),
                           size: 16,
                           color: isPast
                               ? Colors.grey
-                              : Theme.of(context).colorScheme.primary,
+                              : (existingRes != null
+                                    ? Colors.green.shade700
+                                    : Theme.of(context).colorScheme.primary),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           isPast
                               ? 'Fecha pasada (Reservas cerradas)'
-                              : 'Reservar este plato',
+                              : (existingRes != null
+                                    ? '✅ Ya tienes reserva (${existingRes.isPension ? "Pensión" : "Regular"})'
+                                    : 'Reservar este almuerzo'),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: isPast
                                 ? Colors.grey
-                                : Theme.of(context).colorScheme.primary,
+                                : (existingRes != null
+                                      ? Colors.green.shade700
+                                      : Theme.of(context).colorScheme.primary),
                           ),
                         ),
                       ],

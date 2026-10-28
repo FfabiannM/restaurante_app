@@ -91,7 +91,10 @@ class MenuService {
   }) async {
     if (!_isSupabaseReady) return const [];
     try {
-      var query = supabase.from(tableExcepcionCalendario).select();
+      var query = supabase
+          .from(tableExcepcionCalendario)
+          .select()
+          .eq('is_activo', true);
       if (fechaInicio != null) {
         query = query.gte('fecha', fechaInicio);
       }
@@ -115,6 +118,7 @@ class MenuService {
           .from(tableExcepcionCalendario)
           .select()
           .eq('fecha', dateStr)
+          .eq('is_activo', true)
           .maybeSingle();
       return res;
     } catch (e) {

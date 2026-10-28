@@ -275,6 +275,7 @@ export async function fetchExcepcionesCalendario() {
   const { data, error } = await supabase
     .from('excepcion_calendario')
     .select('*')
+    .eq('is_activo', true)
     .order('fecha', { ascending: true });
 
   if (error) throw error;
@@ -293,7 +294,23 @@ export async function createExcepcionCalendario({ fecha, motivo, id_encargado })
     .maybeSingle();
 
   if (existing) {
-    throw new Error(`Ya existe un día de excepción registrado para la fecha ${fecha}.`);
+    if (existing.is_activo) {
+      throw new Error(`Ya existe un día de excepción registrado para la fecha ${fecha}.`);
+    } else {
+      // Reactivar excepción previamente desactivada
+      const { data, error } = await supabase
+        .from('excepcion_calendario')
+        .update({
+          is_activo: true,
+          motivo: motivo.trim(),
+          id_encargado,
+        })
+        .eq('id_excepcion', existing.id_excepcion)
+        .select();
+
+      if (error) throw error;
+      return data;
+    }
   }
 
   const { data, error } = await supabase
@@ -303,6 +320,7 @@ export async function createExcepcionCalendario({ fecha, motivo, id_encargado })
         fecha,
         motivo: motivo.trim(),
         id_encargado,
+        is_activo: true,
       },
     ])
     .select();
@@ -312,10 +330,10 @@ export async function createExcepcionCalendario({ fecha, motivo, id_encargado })
 }
 
 /**
- * Eliminar un día de excepción
+ * Eliminar un día de excepción (Soft delete con is_activo = false)
  */
 export async function deleteExcepcionCalendario(excepcion) {
-  let query = supabase.from('excepcion_calendario').delete();
+  let query = supabase.from('excepcion_calendario').update({ is_activo: false });
 
   if (excepcion?.id_excepcion) {
     query = query.eq('id_excepcion', excepcion.id_excepcion);

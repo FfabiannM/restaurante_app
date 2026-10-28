@@ -169,39 +169,63 @@ export class SupabaseMenuDiaRepository extends IMenuDiaRepository {
     }
 
     // Intento 1: RPC p_dias
+    let saved = false;
     let lastError = null;
     try {
       const { data, error } = await this.client.rpc('guardar_menu_semanal', {
         p_dias: dias,
       });
-      if (!error) return { success: true, data };
-      lastError = error;
+      if (!error) {
+        saved = true;
+      } else {
+        lastError = error;
+      }
     } catch (e) {
       lastError = e;
     }
 
     // Intento 2: RPC dias
-    try {
-      const { data, error } = await this.client.rpc('guardar_menu_semanal', {
-        dias: dias,
-      });
-      if (!error) return { success: true, data };
-      lastError = error;
-    } catch (e2) {
-      lastError = e2;
+    if (!saved) {
+      try {
+        const { data, error } = await this.client.rpc('guardar_menu_semanal', {
+          dias: dias,
+        });
+        if (!error) {
+          saved = true;
+        } else {
+          lastError = error;
+        }
+      } catch (e2) {
+        lastError = e2;
+      }
     }
 
     // Fallback secuencial cliente
-    console.warn('[SupabaseMenuDiaRepository] Ejecutando guardado de respaldo cliente:', lastError?.message);
-    for (const dia of dias) {
-      await this.guardarMenuCompleto({
-        fecha: dia.fecha,
-        estado_publicacion: dia.estado_publicacion,
-        platosIds: dia.platos_ids || [],
-      });
+    if (!saved) {
+      console.warn('[SupabaseMenuDiaRepository] Ejecutando guardado de respaldo cliente:', lastError?.message);
+      for (const dia of dias) {
+        await this.guardarMenuCompleto({
+          fecha: dia.fecha,
+          estado_publicacion: dia.estado_publicacion,
+          platosIds: dia.platos_ids || [],
+        });
+      }
     }
 
-    return { success: true, message: 'Menú semanal guardado exitosamente' };
+    // Sincronización automática de reservas de pensión y platos para las fechas configuradas
+    for (const dia of dias) {
+      if (dia.fecha && (dia.platos_ids || []).length > 0) {
+        try {
+          await this.client.rpc('sincronizar_reservas_menu_fecha', {
+            p_fecha: dia.fecha,
+          });
+        } catch (eSync) {
+          console.warn('[SupabaseMenuDiaRepository] Aviso: Sincronización de reservas para fecha:', dia.fecha, eSync?.message);
+        }
+      }
+    }
+
+    return { success: true, message: 'Menú semanal guardado y reservas sincronizadas exitosamente' };
   }
 
   async deleteMenu(id_menu) {

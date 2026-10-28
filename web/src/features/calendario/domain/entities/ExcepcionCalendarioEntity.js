@@ -12,6 +12,7 @@ export class ExcepcionCalendarioEntity {
     motivo = '',
     id_encargado = null,
     created_at = null,
+    is_activo = true,
   }) {
     this.id_excepcion = id_excepcion;
     // Normalizar fecha en formato YYYY-MM-DD
@@ -19,6 +20,7 @@ export class ExcepcionCalendarioEntity {
     this.motivo = (motivo || '').trim();
     this.id_encargado = id_encargado;
     this.created_at = created_at;
+    this.is_activo = is_activo !== false;
   }
 
   // Compatibilidad con identificadores existentes

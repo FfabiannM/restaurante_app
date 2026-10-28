@@ -40,15 +40,6 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
   // Platos independientes por comensal (null = Empleado, famId = Familiar)
   final Map<String?, Dish> _selectedDishesByComensal = {};
 
-  // Filtro por tipo de plato (enum tipo: Sopa, Segundo, Vegetariano, soporta nulos)
-  String _selectedTipoFilter = 'Todos';
-  static const List<String> _tiposCategories = [
-    'Todos',
-    'Segundo',
-    'Sopa',
-    'Vegetariano',
-  ];
-
   final TextEditingController _notesController = TextEditingController();
 
   // Modo de reserva:
@@ -137,12 +128,15 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
 
     if (mounted) {
       setState(() {
-        _excepcionesFechas = exceptions
+        final activeExceptions = exceptions
+            .where((e) => e['is_activo'] != false)
+            .toList();
+        _excepcionesFechas = activeExceptions
             .map((e) => e['fecha']?.toString() ?? '')
             .where((s) => s.isNotEmpty)
             .toSet();
         _excepcionesMotivos = {
-          for (final e in exceptions)
+          for (final e in activeExceptions)
             if (e['fecha'] != null)
               e['fecha'].toString():
                   e['motivo']?.toString() ?? 'Día de no atención',
@@ -213,19 +207,63 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
     }
   }
 
-  /// Filtra los platos según el enum `tipo`: ['Todos', 'Segundo', 'Sopa', 'Vegetariano'].
-  /// Soporta nulos: si `dish.tipo` es nulo, no se muestra bajo filtros específicos.
-  List<Dish> get _filteredDishes {
-    if (_selectedTipoFilter == 'Todos') {
-      return _dishesForSelectedDate;
+  Future<void> _handleCancelReservation(String reservationId) async {
+    final now = DateTime.now();
+    if (AppDateUtils.isSameDay(_selectedDate, now) && (now.hour > 9 || (now.hour == 9 && now.minute > 0))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No es posible cancelar después de las 9:00 AM del día de la reserva.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
-    return _dishesForSelectedDate.where((d) {
-      final tipo = d.tipo?.trim().toLowerCase();
-      if (tipo == null || tipo.isEmpty) {
-        return false; // Nulo no coincide con tipos específicos
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Cancelar reserva de este día?'),
+        content: const Text(
+          'Se cancelará la reserva para esta fecha y se liberará el cupo de almuerzo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Sí, Cancelar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    final success = await ref
+        .read(userReservationsProvider.notifier)
+        .cancelReservation(reservationId);
+
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reserva cancelada exitosamente para este día.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        ref.read(userReservationsProvider.notifier).loadReservations();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo cancelar la reserva.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-      return tipo == _selectedTipoFilter.toLowerCase();
-    }).toList();
+    }
   }
 
   @override
@@ -422,6 +460,20 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                               fontSize: 12,
                             ),
                           ),
+                          if (employeeActiveRes.isConfirmed) ...[
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              onPressed: () => _handleCancelReservation(employeeActiveRes.id),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red.shade700,
+                                side: BorderSide(color: Colors.red.shade300),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              ),
+                              icon: const Icon(Icons.cancel_outlined, size: 15),
+                              label: const Text('Cancelar reserva de este día', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -469,6 +521,20 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                               fontSize: 12,
                             ),
                           ),
+                          if (familiarActiveRes[_individualFamiliar!.id]?.isConfirmed == true) ...[
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              onPressed: () => _handleCancelReservation(familiarActiveRes[_individualFamiliar!.id]!.id),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red.shade700,
+                                side: BorderSide(color: Colors.red.shade300),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              ),
+                              icon: const Icon(Icons.cancel_outlined, size: 15),
+                              label: const Text('Cancelar reserva de este día', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -921,7 +987,7 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Platos Disponibles del Menú',
+                        'Menú del Día (Informativo)',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -953,45 +1019,14 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
-
-          // Filtros por enum tipo: ['Todos', 'Segundo', 'Sopa', 'Vegetariano']
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _tiposCategories.map((cat) {
-                final isSelected = _selectedTipoFilter == cat;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6.0),
-                  child: FilterChip(
-                    label: Text(
-                      cat,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                    ),
-                    selected: isSelected,
-                    selectedColor: const Color(0xFF2563EB),
-                    backgroundColor: Colors.grey.shade100,
-                    checkmarkColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    onSelected: (selected) {
-                      setState(() => _selectedTipoFilter = cat);
-                    },
-                  ),
-                );
-              }).toList(),
-            ),
+          const SizedBox(height: 6),
+          Text(
+            'El menú es único por fecha laboral · El usuario no elige entre comidas.',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 12),
 
-          // Estado: Excepción, Menú no disponible, cargando o lista de platos
+          // Estado: Excepción, Menú no disponible, cargando o plato del día
           if (_isLoadingDishes)
             const Center(
               child: Padding(
@@ -1026,42 +1061,45 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
             )
           else if (!_isMenuDisponible || _dishesForSelectedDate.isEmpty)
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(14),
+                color: Colors.blue.shade50.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.blue.shade200),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.restaurant_outlined, color: Colors.grey),
-                  SizedBox(width: 10),
+                  Icon(Icons.schedule, color: Colors.blue.shade700, size: 28),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      'Menú en preparación para esta fecha. No hay platos cargados.',
-                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Almuerzo Institucional Programado',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade900,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'La cocina publicará los detalles del plato próximamente. Si estás pensionado, tu almuerzo ya está reservado.',
+                          style: TextStyle(color: Colors.blue.shade800, fontSize: 11.5),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             )
-          else if (_filteredDishes.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Text(
-                'No se encontraron platos para este filtro.',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
-              ),
-            )
           else
-            Column(
-              children: _filteredDishes.map((dish) {
-                final isSelected = _selectedDish?.id == dish.id;
-                final hasTipo =
-                    dish.tipo != null && dish.tipo!.trim().isNotEmpty;
+            // Mostrar plato único informativo
+            Builder(
+              builder: (context) {
+                final dish = _dishesForSelectedDate.first;
+                final hasTipo = dish.tipo != null && dish.tipo!.trim().isNotEmpty;
 
                 Color tipoColor = const Color(0xFF2563EB);
                 if (dish.tipo?.toLowerCase() == 'sopa') {
@@ -1070,147 +1108,144 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                   tipoColor = Colors.green.shade700;
                 }
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: InkWell(
-                    onTap: () {
-                      setState(() => _selectedDish = dish);
-                    },
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF2563EB).withValues(alpha: 0.08)
-                            : Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isSelected
-                              ? const Color(0xFF2563EB)
-                              : Colors.grey.shade200,
-                          width: isSelected ? 2 : 1,
-                        ),
+                    border: Border.all(
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
                       ),
-                      child: Row(
-                        children: [
-                          // Imagen del plato
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: SizedBox(
-                              width: 58,
-                              height: 58,
-                              child:
-                                  dish.imageUrl.startsWith('http') ||
-                                      dish.imageUrl.startsWith('assets')
-                                  ? Image.network(
-                                      dish.imageUrl,
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) =>
-                                              Container(
-                                                color: Colors.grey.shade200,
-                                                child: const Icon(
-                                                  Icons.restaurant,
-                                                  color: Colors.grey,
-                                                ),
-                                              ),
-                                    )
-                                  : Container(
-                                      color: Colors.grey.shade200,
-                                      child: const Icon(
-                                        Icons.restaurant,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        dish.name,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: isSelected
-                                              ? const Color(0xFF2563EB)
-                                              : const Color(0xFF1E293B),
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (isSelected)
-                                      const Icon(
-                                        Icons.check_circle,
-                                        color: Color(0xFF2563EB),
-                                        size: 20,
-                                      ),
-                                  ],
-                                ),
-                                if (dish.description.isNotEmpty)
-                                  Text(
-                                    dish.description,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      color: Colors.grey.shade600,
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      // Imagen del plato
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: SizedBox(
+                          width: 70,
+                          height: 70,
+                          child: dish.imageUrl.startsWith('http') ||
+                                  dish.imageUrl.startsWith('assets')
+                              ? Image.network(
+                                  dish.imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Container(
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(
+                                      Icons.restaurant,
+                                      color: Colors.grey,
+                                      size: 30,
                                     ),
                                   ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    // Si el campo tipo es nulo, no se muestra nada
-                                    if (hasTipo) ...[
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: tipoColor.withValues(
-                                            alpha: 0.12,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          dish.tipo!,
-                                          style: TextStyle(
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.bold,
-                                            color: tipoColor,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                    ],
-                                    Text(
-                                      'Bs. ${dish.price.toStringAsFixed(2)}',
-                                      style: const TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
-                                      ),
+                                )
+                              : Container(
+                                  color: Colors.grey.shade200,
+                                  child: const Icon(
+                                    Icons.restaurant,
+                                    color: Colors.grey,
+                                    size: 30,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    dish.name,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1E293B),
                                     ),
-                                  ],
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'Almuerzo del Día',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade800,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
+                            if (dish.description.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                dish.description,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                if (hasTipo) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: tipoColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      dish.tipo!,
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: tipoColor,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Text(
+                                  'Precio regular: Bs. ${dish.price.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 );
-              }).toList(),
+              },
             ),
         ],
       ),
@@ -1336,50 +1371,41 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                 setState(() => _individualFamiliar = f);
               },
             ),
-            const SizedBox(height: 12),
-            const Text(
-              'Plato para este comensal:',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            DropdownButtonFormField<Dish?>(
-              value: _selectedDishesByComensal[_individualFamiliar?.id] ??
-                  _selectedDish,
-              isExpanded: true,
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                prefixIcon: const Icon(Icons.restaurant_menu),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade100),
               ),
-              items: _dishesForSelectedDate.map((d) {
-                return DropdownMenuItem<Dish?>(
-                  value: d,
-                  child: Text(
-                    '${d.name} (${d.tipo ?? "Plato"})',
-                    style: const TextStyle(fontSize: 13),
-                    overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 16, color: Color(0xFF2563EB)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Menú asignado: ${_selectedDish?.name ?? (_dishesForSelectedDate.isNotEmpty ? _dishesForSelectedDate.first.name : "Almuerzo institucional")}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
                   ),
-                );
-              }).toList(),
-              onChanged: (dish) {
-                if (dish != null) {
-                  setState(() {
-                    _selectedDish = dish;
-                    _selectedDishesByComensal[_individualFamiliar?.id] = dish;
-                  });
-                }
-              },
+                ],
+              ),
             ),
           ] else ...[
-            // MODO CONJUNTO: Empleado + Familiares seleccionados con platos independientes
+            // MODO CONJUNTO: Empleado + Familiares seleccionados con menú del día automático
             const Text(
-              'Marcar comensales y seleccionar plato para cada uno:',
+              'Marcar comensales que asistirán al almuerzo:',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'El menú del día se asignará automáticamente a cada comensal marcado.',
+              style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
             ),
             Material(
               color: Colors.transparent,
@@ -1417,42 +1443,6 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                       },
               ),
             ),
-            if (_includeEmployee && employeeActiveRes == null)
-              Padding(
-                padding: const EdgeInsets.only(left: 8, right: 8, bottom: 10),
-                child: DropdownButtonFormField<Dish?>(
-                  value: _selectedDishesByComensal[null] ?? _selectedDish,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: 'Plato para el empleado',
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    prefixIcon: const Icon(Icons.restaurant_menu, size: 20),
-                  ),
-                  items: _dishesForSelectedDate.map((d) {
-                    return DropdownMenuItem<Dish?>(
-                      value: d,
-                      child: Text(
-                        '${d.name} (${d.tipo ?? "Plato"})',
-                        style: const TextStyle(fontSize: 12.5),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (dish) {
-                    if (dish != null) {
-                      setState(() {
-                        _selectedDishesByComensal[null] = dish;
-                      });
-                    }
-                  },
-                ),
-              ),
             if (familyMembers.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 4.0),
@@ -1467,85 +1457,44 @@ class _EmployeeScreenState extends ConsumerState<EmployeeScreen> {
                 final isChecked =
                     famRes == null && _selectedFamiliarIds.contains(fam.id);
                 final fPrice = familiarTariffs[fam.id] ?? 18.0;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Material(
-                      color: Colors.transparent,
-                      child: CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          famRes != null
-                              ? 'Familiar: ${fam.displayName} (Ya reservado)'
-                              : 'Familiar: ${fam.displayName}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: famRes != null ? Colors.grey.shade600 : null,
-                          ),
-                        ),
-                        subtitle: Text(
-                          famRes != null
-                              ? 'Ya cuenta con una reserva activa (${famRes.dishName})'
-                              : 'Tarifa: Bs. ${fPrice.toStringAsFixed(2)} ${fPrice == 15.0 ? "(Pensionado)" : "(Regular)"}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: famRes != null
-                                ? Colors.purple.shade700
-                                : Colors.grey,
-                          ),
-                        ),
-                        value: isChecked,
-                        activeColor: const Color(0xFF2563EB),
-                        onChanged: famRes != null
-                            ? null
-                            : (val) {
-                                setState(() {
-                                  if (val == true) {
-                                    _selectedFamiliarIds.add(fam.id);
-                                  } else {
-                                    _selectedFamiliarIds.remove(fam.id);
-                                  }
-                                });
-                              },
+                return Material(
+                  color: Colors.transparent,
+                  child: CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      famRes != null
+                          ? 'Familiar: ${fam.displayName} (Ya reservado)'
+                          : 'Familiar: ${fam.displayName}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: famRes != null ? Colors.grey.shade600 : null,
                       ),
                     ),
-                    if (isChecked)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8, right: 8, bottom: 10),
-                        child: DropdownButtonFormField<Dish?>(
-                          value: _selectedDishesByComensal[fam.id] ?? _selectedDish,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            labelText: 'Plato para ${fam.displayName}',
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            prefixIcon: const Icon(Icons.restaurant_menu, size: 20),
-                          ),
-                          items: _dishesForSelectedDate.map((d) {
-                            return DropdownMenuItem<Dish?>(
-                              value: d,
-                              child: Text(
-                                '${d.name} (${d.tipo ?? "Plato"})',
-                                style: const TextStyle(fontSize: 12.5),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (dish) {
-                            if (dish != null) {
-                              setState(() {
-                                _selectedDishesByComensal[fam.id] = dish;
-                              });
-                            }
-                          },
-                        ),
+                    subtitle: Text(
+                      famRes != null
+                          ? 'Ya cuenta con una reserva activa (${famRes.dishName})'
+                          : 'Tarifa: Bs. ${fPrice.toStringAsFixed(2)} ${fPrice == 15.0 ? "(Pensionado)" : "(Regular)"}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: famRes != null
+                            ? Colors.purple.shade700
+                            : Colors.grey,
                       ),
-                  ],
+                    ),
+                    value: isChecked,
+                    activeColor: const Color(0xFF2563EB),
+                    onChanged: famRes != null
+                        ? null
+                        : (val) {
+                            setState(() {
+                              if (val == true) {
+                                _selectedFamiliarIds.add(fam.id);
+                              } else {
+                                _selectedFamiliarIds.remove(fam.id);
+                              }
+                            });
+                          },
+                  ),
                 );
               }),
           ],

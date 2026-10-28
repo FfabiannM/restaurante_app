@@ -106,9 +106,9 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
 
     final beneficiaryTitle = _isManagingFamiliar
         ? (_selectedFamiliar != null
-            ? _selectedFamiliar!.displayName
-            : 'Familiar')
-        : 'Empleado (Tú)';
+              ? _selectedFamiliar!.displayName
+              : 'Familiar')
+        : 'Tú';
 
     return PopScope(
       canPop: true,
@@ -137,7 +137,9 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
           elevation: 0,
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Colors.white))
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              )
             : SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -350,7 +352,10 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
                     Expanded(
                       child: Text(
                         'No tienes familiares registrados aún. Puedes registrarlos en tu perfil o consultar con el administrador.',
-                        style: TextStyle(fontSize: 12, color: Colors.deepOrange),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.deepOrange,
+                        ),
                       ),
                     ),
                   ],
@@ -362,7 +367,10 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
                 initialValue: _selectedFamiliar,
                 decoration: InputDecoration(
                   labelText: 'Seleccionar familiar',
-                  prefixIcon: const Icon(Icons.family_restroom, color: Color(0xFF2563EB)),
+                  prefixIcon: const Icon(
+                    Icons.family_restroom,
+                    color: Color(0xFF2563EB),
+                  ),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
                   border: OutlineInputBorder(
@@ -435,13 +443,19 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
                     ),
                     Text(
                       'Comensal: $beneficiary',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: hasActiveSub
                       ? Colors.green.withValues(alpha: 0.15)
@@ -470,10 +484,14 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
                 style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
               ),
               Text(
-                hasActiveSub ? 'Bs. 15.00 (Oferta pensión)' : 'Bs. 18.00 (Regular)',
+                hasActiveSub
+                    ? 'Bs. 15.00 (Oferta pensión)'
+                    : 'Bs. 18.00 (Regular)',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: hasActiveSub ? Colors.green.shade800 : const Color(0xFF2563EB),
+                  color: hasActiveSub
+                      ? Colors.green.shade800
+                      : const Color(0xFF2563EB),
                 ),
               ),
             ],
@@ -508,7 +526,11 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.restaurant_menu, color: Color(0xFF2563EB), size: 20),
+                  Icon(
+                    Icons.restaurant_menu,
+                    color: Color(0xFF2563EB),
+                    size: 20,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -599,13 +621,19 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
                     ),
                     Text(
                       'Comensal: $beneficiary',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: hasActiveSub
                       ? Colors.green.withValues(alpha: 0.15)
@@ -735,7 +763,10 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
               icon: const Icon(Icons.check_circle_outline),
               label: Text(
                 'Confirmar Modalidad para $beneficiary',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -786,7 +817,9 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(isPensionado ? 'Confirmar Pensión' : 'Confirmar Modalidad Regular'),
+        title: Text(
+          isPensionado ? 'Confirmar Pensión' : 'Confirmar Modalidad Regular',
+        ),
         content: Text(
           '¿Deseas registrar la modalidad $_selectedNextModalidad para $targetName durante todo el mes de ${AppDateUtils.getMonthName(month)} $year?',
         ),
@@ -798,7 +831,9 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: isPensionado ? const Color(0xFF2563EB) : Colors.grey.shade800,
+              backgroundColor: isPensionado
+                  ? const Color(0xFF2563EB)
+                  : Colors.grey.shade800,
             ),
             child: const Text('Confirmar'),
           ),
@@ -834,19 +869,26 @@ class _PensionScreenState extends ConsumerState<PensionScreen> {
     if (mounted) {
       if (success) {
         setState(() => _hasUnsavedChanges = false);
+        final extraMsg = isPensionado
+            ? '\n¡Se han reservado automáticamente todos los días hábiles del mes! Puedes gestionar o cancelar días específicos desde Mis Reservas.'
+            : '';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Modalidad registrada: $_selectedNextModalidad para $targetName',
+              'Modalidad registrada: $_selectedNextModalidad para $targetName.$extraMsg',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: Colors.green.shade700,
+            duration: const Duration(seconds: 5),
           ),
         );
         _loadSubscriptions();
+        ref.read(userReservationsProvider.notifier).loadReservations();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No se pudo registrar la modalidad (el mes ya inició).'),
+            content: Text(
+              'No se pudo registrar la modalidad (el mes ya inició).',
+            ),
             backgroundColor: Colors.red,
           ),
         );

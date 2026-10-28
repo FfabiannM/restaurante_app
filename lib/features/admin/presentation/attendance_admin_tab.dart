@@ -21,7 +21,8 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
   bool _isLoading = true;
   String? _selectedEmployeeId;
   String _searchQuery = '';
-  String _statusFilter = 'TODOS'; // 'TODOS', 'RECOGIDO', 'PENDIENTE', 'REGISTRADO'
+  String _statusFilter =
+      'TODOS'; // 'TODOS', 'RECOGIDO', 'PENDIENTE', 'REGISTRADO'
 
   @override
   void initState() {
@@ -134,7 +135,9 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Asistencia registrada con éxito para ${emp.fullName}'),
+            content: Text(
+              'Asistencia registrada con éxito para ${emp.fullName}',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -161,9 +164,8 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
 
     // Filtros de búsqueda y estado
     final filteredEmployees = allEmployees.where((emp) {
-      final matchesSearch = emp.fullName
-              .toLowerCase()
-              .contains(_searchQuery.toLowerCase()) ||
+      final matchesSearch =
+          emp.fullName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           emp.ci.toLowerCase().contains(_searchQuery.toLowerCase());
       if (!matchesSearch) return false;
 
@@ -183,13 +185,17 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
     }).toList();
 
     final activeReservationsCount = _todayReservations
-        .where((r) => r.familiarId == null && r.status.toLowerCase() != 'cancelada')
+        .where(
+          (r) => r.familiarId == null && r.status.toLowerCase() != 'cancelada',
+        )
         .length;
     final recogidosCount = _todayReservations
-        .where((r) =>
-            r.familiarId == null &&
-            r.status.toLowerCase() != 'cancelada' &&
-            r.recogido)
+        .where(
+          (r) =>
+              r.familiarId == null &&
+              r.status.toLowerCase() != 'cancelada' &&
+              r.recogido,
+        )
         .length;
     final attendanceCount = _attendanceRecords.length;
 
@@ -234,7 +240,10 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
                         ],
                       ),
                       IconButton(
-                        icon: const Icon(Icons.refresh, color: Color(0xFF2563EB)),
+                        icon: const Icon(
+                          Icons.refresh,
+                          color: Color(0xFF2563EB),
+                        ),
                         onPressed: _loadData,
                       ),
                     ],
@@ -283,8 +292,11 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Registro de Asistencia (HU11)',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        'Registro de Asistencia',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       ElevatedButton.icon(
                         onPressed: () async {
@@ -296,8 +308,9 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
                               messenger.showSnackBar(
                                 SnackBar(
                                   content: Text(result.mensaje),
-                                  backgroundColor:
-                                      result.isSuccess ? Colors.green : Colors.red,
+                                  backgroundColor: result.isSuccess
+                                      ? Colors.green
+                                      : Colors.red,
                                 ),
                               );
                             }
@@ -314,7 +327,10 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                        icon: const Icon(
+                          Icons.qr_code_scanner_rounded,
+                          size: 18,
+                        ),
                         label: const Text(
                           'Escanear QR',
                           style: TextStyle(fontSize: 12.5),
@@ -349,8 +365,9 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
                           '${emp.fullName} ${hasRes ? "• (Con Reserva)" : "• (Sin Reserva)"}',
                           style: TextStyle(
                             fontSize: 13,
-                            fontWeight:
-                                hasRes ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: hasRes
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                         ),
                       );
@@ -481,19 +498,19 @@ class _AttendanceAdminTabState extends ConsumerState<AttendanceAdminTab> {
                             CircleAvatar(
                               backgroundColor: hasReservation
                                   ? (dishPickedUp
-                                      ? Colors.green.shade100
-                                      : Colors.orange.shade100)
+                                        ? Colors.green.shade100
+                                        : Colors.orange.shade100)
                                   : Colors.grey.shade200,
                               child: Icon(
                                 hasReservation
                                     ? (dishPickedUp
-                                        ? Icons.check
-                                        : Icons.restaurant)
+                                          ? Icons.check
+                                          : Icons.restaurant)
                                     : Icons.person_off_outlined,
                                 color: hasReservation
                                     ? (dishPickedUp
-                                        ? Colors.green.shade800
-                                        : Colors.orange.shade800)
+                                          ? Colors.green.shade800
+                                          : Colors.orange.shade800)
                                     : Colors.grey,
                                 size: 20,
                               ),

@@ -16,6 +16,7 @@ export class ExcepcionCalendarioModel {
       motivo: row.motivo,
       id_encargado: row.id_encargado,
       created_at: row.created_at,
+      is_activo: row.is_activo !== false,
     });
   }
 
@@ -24,6 +25,7 @@ export class ExcepcionCalendarioModel {
       fecha: entity.fecha,
       motivo: entity.motivo,
       id_encargado: entity.id_encargado,
+      is_activo: entity.is_activo !== undefined ? entity.is_activo : true,
     };
   }
 }

@@ -170,9 +170,8 @@ export default function MenuSemanalModal({
       const pidStr = String(platoId);
       const isSelected = currentList.some((id) => String(id) === pidStr);
 
-      const nextList = isSelected
-        ? currentList.filter((id) => String(id) !== pidStr)
-        : [...currentList, Number(platoId)];
+      // Ahora solo se permite seleccionar UN plato por día al crear un menú
+      const nextList = isSelected ? [] : [Number(platoId)];
 
       return {
         ...prev,
@@ -368,7 +367,7 @@ export default function MenuSemanalModal({
                           : 'bg-slate-100 text-slate-400'
                       }`}
                     >
-                      {count} {count === 1 ? 'plato' : 'platos'}
+                      {count > 0 ? '1 plato' : 'Sin plato'}
                     </span>
                   </div>
                 </button>
@@ -377,20 +376,25 @@ export default function MenuSemanalModal({
           </div>
         </div>
 
-        {/* Área de Selección de Platos para el Día Activo */}
+        {/* Área de Selección de Plato para el Día Activo */}
         <div className="bg-slate-50/70 border border-slate-200 rounded-2xl p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-2">
             <div className="flex items-center space-x-2">
               <ChefHat className="w-4 h-4 text-blue-600" />
-              <h4 className="text-sm font-bold text-slate-800">
-                Platos para el {activeDay.dayName} ({activeDay.displayDate})
-              </h4>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">
+                  Plato del Día para el {activeDay.dayName} ({activeDay.displayDate})
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Selecciona el plato único de almuerzo (el menú es informativo para los comensales).
+                </p>
+              </div>
               <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
                 activeDayPlatos.length > 0
-                  ? 'bg-blue-100 text-blue-800'
+                  ? 'bg-emerald-100 text-emerald-800'
                   : 'bg-slate-200 text-slate-600'
               }`}>
-                {activeDayPlatos.length} seleccionados
+                {activeDayPlatos.length > 0 ? '1 seleccionado' : 'Sin asignar'}
               </span>
             </div>
 
@@ -401,7 +405,7 @@ export default function MenuSemanalModal({
                   onClick={handleClearActiveDay}
                   className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
                 >
-                  Limpiar día
+                  Quitar plato
                 </button>
               )}
               {/* Buscador de platos */}
@@ -418,7 +422,7 @@ export default function MenuSemanalModal({
             </div>
           </div>
 
-          {/* Listado con Checkboxes de Platos */}
+          {/* Listado con Selector Radio de Platos */}
           {filteredPlatos.length === 0 ? (
             <div className="py-6 text-center text-slate-400 text-xs">
               No hay platos en el catálogo que coincidan con la búsqueda.
@@ -434,16 +438,17 @@ export default function MenuSemanalModal({
                     onClick={() => togglePlatoForActiveDay(plato.id_plato || plato.id)}
                     className={`p-3 rounded-xl border cursor-pointer transition select-none flex items-start space-x-2.5 ${
                       isSelected
-                        ? 'bg-blue-50/90 border-blue-400 text-blue-950 shadow-2xs ring-1 ring-blue-300'
+                        ? 'bg-blue-50/90 border-blue-500 text-blue-950 shadow-xs ring-2 ring-blue-300'
                         : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => {}}
-                      className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 pointer-events-none"
-                    />
+                    <div className="mt-0.5">
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition ${
+                        isSelected ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'
+                      }`}>
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-bold truncate">{plato.nombre}</p>

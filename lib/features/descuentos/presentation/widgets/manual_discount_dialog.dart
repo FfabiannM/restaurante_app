@@ -6,7 +6,10 @@ class ManualDiscountDialog extends StatefulWidget {
 
   const ManualDiscountDialog({super.key, required this.detalle});
 
-  static Future<double?> show(BuildContext context, DetalleCierreEntity detalle) {
+  static Future<double?> show(
+    BuildContext context,
+    DetalleCierreEntity detalle,
+  ) {
     return showDialog<double>(
       context: context,
       builder: (_) => ManualDiscountDialog(detalle: detalle),
@@ -63,7 +66,7 @@ class _ManualDiscountDialogState extends State<ManualDiscountDialog> {
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Ajuste Manual de Descuento (HU12)',
+              'Ajuste Manual de Descuento',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
           ),
@@ -94,7 +97,10 @@ class _ManualDiscountDialogState extends State<ManualDiscountDialog> {
                 const Text('Total Calculado:', style: TextStyle(fontSize: 13)),
                 Text(
                   'Bs. ${(widget.detalle.cantidadCobrable * widget.detalle.precioUnitario).toStringAsFixed(2)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -107,13 +113,17 @@ class _ManualDiscountDialogState extends State<ManualDiscountDialog> {
           const SizedBox(height: 6),
           TextField(
             controller: _controller,
-            keyboardType: const TextInputPainter(signed: false, decimal: true) as TextInputType? ??
-                const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
               prefixText: 'Bs. ',
               errorText: _errorText,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
             ),
           ),
         ],
@@ -127,7 +137,9 @@ class _ManualDiscountDialogState extends State<ManualDiscountDialog> {
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF2563EB),
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
           onPressed: _onConfirm,
           child: const Text('Confirmar'),

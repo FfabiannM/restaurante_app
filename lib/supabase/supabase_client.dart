@@ -202,6 +202,7 @@ Future<List<Map<String, dynamic>>> fetchExcepcionesCalendario() async {
   final data = await supabase
       .from('excepcion_calendario')
       .select()
+      .eq('is_activo', true)
       .order('fecha', ascending: true);
 
   return List<Map<String, dynamic>>.from(data);
@@ -220,14 +221,31 @@ Future<dynamic> createExcepcionCalendario({
       .maybeSingle();
 
   if (existing != null) {
-    throw Exception(
-      'Ya existe un día de excepción registrado para la fecha $fecha.',
-    );
+    if (existing['is_activo'] == true) {
+      throw Exception(
+        'Ya existe un día de excepción registrado para la fecha $fecha.',
+      );
+    } else {
+      // Reactivar existente
+      final updatePayload = <String, dynamic>{
+        'is_activo': true,
+        'motivo': motivo.trim(),
+      };
+      if (idEncargado != null) {
+        updatePayload['id_encargado'] = idEncargado;
+      }
+      return await supabase
+          .from('excepcion_calendario')
+          .update(updatePayload)
+          .eq('id_excepcion', existing['id_excepcion'])
+          .select();
+    }
   }
 
   final insertPayload = <String, dynamic>{
     'fecha': fecha,
     'motivo': motivo.trim(),
+    'is_activo': true,
   };
   if (idEncargado != null) {
     insertPayload['id_encargado'] = idEncargado;
@@ -241,7 +259,7 @@ Future<dynamic> createExcepcionCalendario({
   return data;
 }
 
-/// Eliminar un día de excepción
+/// Eliminar un día de excepción (Soft delete con is_activo = false)
 Future<void> deleteExcepcionCalendario(dynamic excepcionIdOrFecha) async {
   if (excepcionIdOrFecha is Map) {
     final idExcepcion =
@@ -249,13 +267,16 @@ Future<void> deleteExcepcionCalendario(dynamic excepcionIdOrFecha) async {
     if (idExcepcion != null) {
       await supabase
           .from('excepcion_calendario')
-          .delete()
+          .update({'is_activo': false})
           .eq('id_excepcion', idExcepcion);
       return;
     }
     final fecha = excepcionIdOrFecha['fecha'];
     if (fecha != null) {
-      await supabase.from('excepcion_calendario').delete().eq('fecha', fecha);
+      await supabase
+          .from('excepcion_calendario')
+          .update({'is_activo': false})
+          .eq('fecha', fecha);
       return;
     }
   }
@@ -264,11 +285,14 @@ Future<void> deleteExcepcionCalendario(dynamic excepcionIdOrFecha) async {
   final str = excepcionIdOrFecha.toString();
   if (str.contains('-')) {
     // Parece una fecha YYYY-MM-DD
-    await supabase.from('excepcion_calendario').delete().eq('fecha', str);
+    await supabase
+        .from('excepcion_calendario')
+        .update({'is_activo': false})
+        .eq('fecha', str);
   } else {
     await supabase
         .from('excepcion_calendario')
-        .delete()
+        .update({'is_activo': false})
         .eq('id_excepcion', excepcionIdOrFecha);
   }
 }

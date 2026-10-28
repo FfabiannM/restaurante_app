@@ -21,6 +21,7 @@ export class SupabaseCalendarioRepository extends ICalendarioRepository {
     const { data, error } = await this.client
       .from('excepcion_calendario')
       .select('*')
+      .eq('is_activo', true)
       .order('fecha', { ascending: true });
 
     if (error) {
@@ -35,6 +36,7 @@ export class SupabaseCalendarioRepository extends ICalendarioRepository {
       .from('excepcion_calendario')
       .select('fecha')
       .eq('fecha', fecha)
+      .eq('is_activo', true)
       .maybeSingle();
 
     if (error) {
@@ -45,6 +47,35 @@ export class SupabaseCalendarioRepository extends ICalendarioRepository {
   }
 
   async createExcepcion({ fecha, motivo, id_encargado }) {
+    // Verificar si ya existe un registro para esta fecha
+    const { data: existing } = await this.client
+      .from('excepcion_calendario')
+      .select('*')
+      .eq('fecha', fecha)
+      .maybeSingle();
+
+    if (existing) {
+      if (existing.is_activo) {
+        throw new AppError(`Ya existe un día de excepción activo para la fecha ${fecha}.`, 'VALIDATION_ERROR');
+      }
+      // Si existía inactivo, reactivarlo
+      const { data, error } = await this.client
+        .from('excepcion_calendario')
+        .update({
+          is_activo: true,
+          motivo,
+          id_encargado,
+        })
+        .eq('id_excepcion', existing.id_excepcion)
+        .select()
+        .single();
+
+      if (error) {
+        throw new AppError(error.message, 'REACTIVATE_EXCEPCION_ERROR', error);
+      }
+      return ExcepcionCalendarioModel.fromSupabase(data);
+    }
+
     const { data, error } = await this.client
       .from('excepcion_calendario')
       .insert([
@@ -52,6 +83,7 @@ export class SupabaseCalendarioRepository extends ICalendarioRepository {
           fecha,
           motivo,
           id_encargado,
+          is_activo: true,
         },
       ])
       .select()
@@ -65,7 +97,9 @@ export class SupabaseCalendarioRepository extends ICalendarioRepository {
   }
 
   async deleteExcepcion(excepcion) {
-    let query = this.client.from('excepcion_calendario').delete();
+    let query = this.client
+      .from('excepcion_calendario')
+      .update({ is_activo: false });
 
     if (excepcion.id_excepcion) {
       query = query.eq('id_excepcion', excepcion.id_excepcion);

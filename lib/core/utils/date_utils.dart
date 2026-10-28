@@ -86,6 +86,17 @@ class AppDateUtils {
 
   static String getWeekdayName(DateTime date) => getDiaSemana(date);
 
+  static DateTime getMondayOfWeek(DateTime date) {
+    return DateTime(date.year, date.month, date.day)
+        .subtract(Duration(days: date.weekday - 1));
+  }
+
+  static String getDayOfWeekAbbr(DateTime date) {
+    const abbrs = ['', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+    if (date.weekday >= 1 && date.weekday <= 7) return abbrs[date.weekday];
+    return 'LUN';
+  }
+
   /// Cuenta la cantidad de días hábiles de un mes dado,
   /// excluyendo sábados, domingos y los feriados proporcionados.
   static int countBusinessDays(

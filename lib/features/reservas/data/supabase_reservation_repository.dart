@@ -692,7 +692,10 @@ class SupabaseReservationRepository implements ReservationRepository {
 
       // 1. Consultar excepcion_calendario (HU6)
       try {
-        final exRes = await client.from('excepcion_calendario').select();
+        final exRes = await client
+            .from('excepcion_calendario')
+            .select()
+            .eq('is_activo', true);
         if (exRes.isNotEmpty) {
           for (final row in exRes) {
             final fStr = row['fecha']?.toString();
