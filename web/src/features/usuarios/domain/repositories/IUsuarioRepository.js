@@ -33,6 +33,16 @@ export class IUsuarioRepository {
   }
 
   /**
+   * Actualiza los datos personales de un usuario (nombre, apellidos, telefono, ci_codigo, rol)
+   * @param {string} id_usuario
+   * @param {object} userData
+   * @returns {Promise<import('../entities/UsuarioEntity').UsuarioEntity>}
+   */
+  async updateUsuario(id_usuario, userData) {
+    throw new Error('Método updateUsuario() no implementado en IUsuarioRepository');
+  }
+
+  /**
    * Elimina un usuario permanentemente
    * @param {string} id_usuario
    * @returns {Promise<void>}

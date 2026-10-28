@@ -4,6 +4,7 @@ import {
   toggleUsuarioEstadoUseCase, 
   deleteUsuarioUseCase,
   registerUsuarioUseCase,
+  updateUsuarioUseCase,
   getSolicitudesRecuperacionUseCase,
   cambiarPasswordUsuarioUseCase 
 } from '../../di';
@@ -87,6 +88,12 @@ export function useUsuarios() {
     return newUser;
   };
 
+  const updateUser = async (id_usuario, userData) => {
+    const updatedUser = await updateUsuarioUseCase.execute(id_usuario, userData);
+    await loadUsuarios(); // Refrescar lista completa
+    return updatedUser;
+  };
+
   const filteredUsuarios = useMemo(() => {
     return usuarios.filter((u) => {
       // Filtro de búsqueda
@@ -162,6 +169,7 @@ export function useUsuarios() {
     toggleStatus,
     deleteUser,
     registerUser,
+    updateUser,
   };
 }
 

@@ -90,44 +90,43 @@ export default function UsuarioRow({
 
       {/* Acciones */}
       <td className="py-3.5 px-4 sm:px-6 text-right whitespace-nowrap">
-        <div className="inline-flex items-center justify-end gap-1.5">
-          {/* Familiares (solo para empleados) */}
+        <div className="inline-grid grid-cols-4 gap-1.5 items-center justify-end">
+          {/* Familiares (solo para empleados, invisible si no es empleado para reservar el espacio) */}
           {user.rol === 'Empleado' ? (
             <button
               type="button"
               onClick={() => onManageFamiliares?.(user)}
-              className="px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-medium transition flex items-center space-x-1 shrink-0"
+              className="w-8 h-8 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition shrink-0"
               title="Gestionar familiares"
             >
-              <Users className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">Familiares</span>
+              <Users className="w-4 h-4" />
             </button>
-          ) : null}
+          ) : (
+            <div className="w-8 h-8 invisible pointer-events-none" aria-hidden="true" />
+          )}
 
           {/* Ver Detalles */}
           <button
             type="button"
             onClick={() => onSelectDetails(user)}
-            className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-medium transition flex items-center space-x-1 shrink-0"
+            className="w-8 h-8 flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition shrink-0"
             title="Ver detalles"
           >
-            <Eye className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">Detalles</span>
+            <Eye className="w-4 h-4" />
           </button>
 
           {/* Cambiar contraseña */}
           <button
             type="button"
             onClick={() => onRequestChangePassword(user)}
-            className={`px-2 py-1.5 rounded-lg text-xs font-medium transition flex items-center space-x-1 shrink-0 ${
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition shrink-0 ${
               hasPendingPasswordRequest
                 ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-xs'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
             }`}
             title={hasPendingPasswordRequest ? 'Usuario solicitó nueva contraseña' : 'Cambiar contraseña'}
           >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">{hasPendingPasswordRequest ? 'Atender Clave' : 'Clave'}</span>
+            <KeyRound className="w-4 h-4" />
           </button>
 
           {/* Anular acceso / Activar */}
@@ -135,7 +134,7 @@ export default function UsuarioRow({
             type="button"
             onClick={() => onToggleStatus(user)}
             disabled={isLoadingAction}
-            className={`px-2 py-1.5 rounded-lg text-xs font-medium transition flex items-center space-x-1 shrink-0 ${
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition shrink-0 ${
               isUserActive
                 ? 'bg-rose-50 hover:bg-rose-100 text-rose-700'
                 : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
@@ -143,15 +142,9 @@ export default function UsuarioRow({
             title={isUserActive ? 'Anular acceso' : 'Reactivar acceso'}
           >
             {isUserActive ? (
-              <>
-                <UserX className="w-3.5 h-3.5" />
-                <span className="hidden xl:inline">Anular</span>
-              </>
+              <UserX className="w-4 h-4" />
             ) : (
-              <>
-                <UserCheck className="w-3.5 h-3.5" />
-                <span className="hidden xl:inline">Activar</span>
-              </>
+              <UserCheck className="w-4 h-4" />
             )}
           </button>
         </div>

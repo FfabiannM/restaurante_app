@@ -31,35 +31,44 @@ export class SupabaseUsuarioRepository extends IUsuarioRepository {
     return (data || []).map((row) => UsuarioModel.fromSupabase(row));
   }
 
-  async checkUniqueness({ ci_codigo, email, telefono }) {
+  async checkUniqueness({ ci_codigo, email, telefono, excludeUserId = null }) {
     let isCiAvailable = true;
     let isEmailAvailable = true;
     let isPhoneAvailable = true;
 
     if (ci_codigo) {
-      const { data: ciRow } = await this.client
+      let query = this.client
         .from('vista_usuarios')
         .select('id_usuario')
-        .eq('ci_codigo', ci_codigo.trim())
-        .maybeSingle();
+        .eq('ci_codigo', ci_codigo.trim());
+      if (excludeUserId) {
+        query = query.neq('id_usuario', excludeUserId);
+      }
+      const { data: ciRow } = await query.maybeSingle();
       if (ciRow) isCiAvailable = false;
     }
 
     if (email) {
-      const { data: emailRow } = await this.client
+      let query = this.client
         .from('vista_usuarios')
         .select('id_usuario')
-        .eq('email', email.trim().toLowerCase())
-        .maybeSingle();
+        .eq('email', email.trim().toLowerCase());
+      if (excludeUserId) {
+        query = query.neq('id_usuario', excludeUserId);
+      }
+      const { data: emailRow } = await query.maybeSingle();
       if (emailRow) isEmailAvailable = false;
     }
 
     if (telefono) {
-      const { data: phoneRow } = await this.client
+      let query = this.client
         .from('vista_usuarios')
         .select('id_usuario')
-        .eq('telefono', telefono.trim())
-        .maybeSingle();
+        .eq('telefono', telefono.trim());
+      if (excludeUserId) {
+        query = query.neq('id_usuario', excludeUserId);
+      }
+      const { data: phoneRow } = await query.maybeSingle();
       if (phoneRow) isPhoneAvailable = false;
     }
 
@@ -126,6 +135,73 @@ export class SupabaseUsuarioRepository extends IUsuarioRepository {
     if (error) {
       throw new AppError(error.message, 'UPDATE_STATUS_ERROR', error);
     }
+  }
+
+  async updateUsuario(id_usuario, userData) {
+    const { nombre, nombres, apellidos, ci_codigo, telefono, rol } = userData;
+    const cleanNombre = (nombres || nombre || '').trim();
+    const cleanApellidos = (apellidos || '').trim();
+    const cleanTelefono = (telefono || '').trim();
+    const cleanCi = (ci_codigo || '').trim();
+
+    // 1. Obtener id_persona asociado si existe
+    const { data: userRow } = await this.client
+      .from('usuario')
+      .select('id_persona')
+      .eq('id_usuario', id_usuario)
+      .maybeSingle();
+
+    const personaId = userRow?.id_persona || id_usuario;
+
+    // 2. Actualizar en tabla persona
+    const { error: pError } = await this.client
+      .from('persona')
+      .update({
+        nombre: cleanNombre,
+        apellidos: cleanApellidos,
+        telefono: cleanTelefono || null,
+      })
+      .eq('id_persona', personaId);
+
+    // Si da error la tabla persona, o como actualización de campos propios en usuario:
+    const usuarioUpdates = {};
+    if (cleanCi) usuarioUpdates.ci_codigo = cleanCi;
+    if (rol) usuarioUpdates.rol = rol;
+    if (cleanTelefono) usuarioUpdates.telefono = cleanTelefono;
+    if (cleanNombre) usuarioUpdates.nombres = cleanNombre;
+    if (cleanApellidos) usuarioUpdates.apellidos = cleanApellidos;
+
+    if (Object.keys(usuarioUpdates).length > 0) {
+      const { error: uError } = await this.client
+        .from('usuario')
+        .update(usuarioUpdates)
+        .eq('id_usuario', id_usuario);
+
+      if (uError && pError) {
+        throw new AppError(uError.message || pError.message, 'UPDATE_USER_ERROR', uError);
+      }
+    }
+
+    // 3. Obtener el usuario actualizado de la vista
+    const { data: updatedRow } = await this.client
+      .from('vista_usuarios')
+      .select('*')
+      .eq('id_usuario', id_usuario)
+      .maybeSingle();
+
+    if (updatedRow) {
+      return UsuarioModel.fromSupabase(updatedRow);
+    }
+
+    return UsuarioModel.fromSupabase({
+      id_usuario,
+      nombre: cleanNombre,
+      nombres: cleanNombre,
+      apellidos: cleanApellidos,
+      ci_codigo: cleanCi,
+      telefono: cleanTelefono,
+      rol,
+    });
   }
 
   async deleteUsuario(id_usuario) {

@@ -36,6 +36,7 @@ export default function UsuariosPage() {
     toggleStatus,
     deleteUser,
     registerUser,
+    updateUser,
     solicitudes,
     loadingSolicitudes,
     pendingRequestsMap,
@@ -231,6 +232,12 @@ export default function UsuariosPage() {
         user={selectedUser}
         onClose={() => setSelectedUser(null)}
         onOpenFamiliares={(u) => setFamiliarUserModal(u)}
+        onUpdateUser={async (id_usuario, data) => {
+          const updated = await updateUser(id_usuario, data);
+          setSelectedUser((prev) => (prev ? { ...prev, ...data, ...updated } : updated));
+          return updated;
+        }}
+        showToast={showToast}
       />
 
       <UsuarioDeleteModal

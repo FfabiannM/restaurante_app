@@ -63,13 +63,13 @@ export default function UsuariosTable({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse table-fixed min-w-[980px]">
             <colgroup>
-              <col className="w-[26%]" />
+              <col className="w-[24%]" />
               <col className="w-[12%]" />
               <col className="w-[12%]" />
-              <col className="w-[20%]" />
+              <col className="w-[18%]" />
               <col className="w-[11%]" />
               <col className="w-[9%]" />
-              <col className="w-[190px]" />
+              <col className="w-[230px]" />
             </colgroup>
             <thead>
               <tr className="bg-blue-50/70 border-b border-blue-100 text-blue-900 text-xs uppercase font-bold tracking-wider">

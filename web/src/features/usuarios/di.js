@@ -3,6 +3,7 @@ import { SupabaseFamiliarRepository } from './data/repositories/SupabaseFamiliar
 
 import { GetUsuariosUseCase } from './domain/usecases/GetUsuariosUseCase';
 import { RegisterUsuarioUseCase } from './domain/usecases/RegisterUsuarioUseCase';
+import { UpdateUsuarioUseCase } from './domain/usecases/UpdateUsuarioUseCase';
 import { ToggleUsuarioEstadoUseCase } from './domain/usecases/ToggleUsuarioEstadoUseCase';
 import { DeleteUsuarioUseCase } from './domain/usecases/DeleteUsuarioUseCase';
 
@@ -21,6 +22,7 @@ const familiarRepository = new SupabaseFamiliarRepository();
 
 export const getUsuariosUseCase = new GetUsuariosUseCase(usuarioRepository);
 export const registerUsuarioUseCase = new RegisterUsuarioUseCase(usuarioRepository);
+export const updateUsuarioUseCase = new UpdateUsuarioUseCase(usuarioRepository);
 export const toggleUsuarioEstadoUseCase = new ToggleUsuarioEstadoUseCase(usuarioRepository);
 export const deleteUsuarioUseCase = new DeleteUsuarioUseCase(usuarioRepository);
 export const getSolicitudesRecuperacionUseCase = new GetSolicitudesRecuperacionUseCase(usuarioRepository);
