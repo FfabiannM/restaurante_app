@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useUsuarios } from '../hooks/useUsuarios';
-import { Users, UserPlus, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Users, UserPlus, RefreshCw, CheckCircle2, KeyRound } from 'lucide-react';
 
 import UsuariosStats from '../components/UsuariosStats';
 import UsuariosFilter from '../components/UsuariosFilter';
@@ -9,6 +9,8 @@ import UsuarioCreateModal from '../components/UsuarioCreateModal';
 import UsuarioDetailsModal from '../components/UsuarioDetailsModal';
 import UsuarioDeleteModal from '../components/UsuarioDeleteModal';
 import UsuarioFamiliarModal from '../components/UsuarioFamiliarModal';
+import UsuarioPasswordModal from '../components/UsuarioPasswordModal';
+import SolicitudesPasswordModal from '../components/SolicitudesPasswordModal';
 
 /**
  * Página Principal: UsuariosPage
@@ -34,6 +36,12 @@ export default function UsuariosPage() {
     toggleStatus,
     deleteUser,
     registerUser,
+    solicitudes,
+    loadingSolicitudes,
+    pendingRequestsMap,
+    pendingRequestsCount,
+    loadSolicitudes,
+    cambiarPassword,
   } = useUsuarios();
 
   // Estados locales de modales
@@ -43,6 +51,8 @@ export default function UsuariosPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [familiarUserModal, setFamiliarUserModal] = useState(null);
   const [showGeneralFamiliarModal, setShowGeneralFamiliarModal] = useState(false);
+  const [userForPasswordReset, setUserForPasswordReset] = useState(null);
+  const [showSolicitudesModal, setShowSolicitudesModal] = useState(false);
   const [successToast, setSuccessToast] = useState(null);
 
   const showToast = (message) => {
@@ -74,6 +84,16 @@ export default function UsuariosPage() {
       alert('Error al eliminar usuario.');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleSavePassword = async (idUsuario, newPassword) => {
+    try {
+      await cambiarPassword(idUsuario, newPassword);
+      showToast('Contraseña actualizada exitosamente.');
+    } catch (err) {
+      console.error('[UsuariosPage] Error updating password:', err);
+      throw err;
     }
   };
 
@@ -120,12 +140,31 @@ export default function UsuariosPage() {
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={loadUsuarios}
+            onClick={() => {
+              loadUsuarios();
+              loadSolicitudes();
+            }}
             disabled={loading}
             className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition shadow-2xs hover:text-slate-900 cursor-pointer"
             title="Recargar datos"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+          </button>
+
+          {/* Botón de Solicitudes de Contraseña con badge reactivo */}
+          <button
+            type="button"
+            onClick={() => setShowSolicitudesModal(true)}
+            className="relative flex items-center space-x-2 px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-sm font-semibold transition cursor-pointer"
+            title="Ver solicitudes de cambio de contraseña"
+          >
+            <KeyRound className="w-4 h-4 text-amber-600" />
+            <span>Solicitudes</span>
+            {pendingRequestsCount > 0 && (
+              <span className="ml-1 px-2 py-0.5 text-xs font-black bg-amber-600 text-white rounded-full shadow-xs animate-pulse">
+                {pendingRequestsCount}
+              </span>
+            )}
           </button>
 
           {empleados.length > 0 && (
@@ -171,10 +210,12 @@ export default function UsuariosPage() {
         error={error}
         onRetry={loadUsuarios}
         actionLoadingId={actionLoadingId}
+        pendingRequestsMap={pendingRequestsMap}
         onSelectDetails={(u) => setSelectedUser(u)}
         onToggleStatus={handleToggleStatus}
         onDeleteClick={(u) => setUserToDelete(u)}
         onManageFamiliares={(u) => setFamiliarUserModal(u)}
+        onRequestChangePassword={(u) => setUserForPasswordReset(u)}
       />
 
       {/* Modals */}
@@ -214,6 +255,44 @@ export default function UsuariosPage() {
         onClose={() => setShowGeneralFamiliarModal(false)}
         employees={empleados}
         showToast={showToast}
+      />
+
+      {/* Modal de Cambio de Contraseña */}
+      <UsuarioPasswordModal
+        isOpen={Boolean(userForPasswordReset)}
+        user={userForPasswordReset}
+        hasPendingRequest={
+          userForPasswordReset ? (
+            pendingRequestsMap.has((userForPasswordReset.email || '').toLowerCase()) ||
+            pendingRequestsMap.has(userForPasswordReset.id_usuario)
+          ) : false
+        }
+        onClose={() => setUserForPasswordReset(null)}
+        onSavePassword={handleSavePassword}
+      />
+
+      {/* Modal de Solicitudes de Recuperación */}
+      <SolicitudesPasswordModal
+        isOpen={showSolicitudesModal}
+        onClose={() => setShowSolicitudesModal(false)}
+        solicitudes={solicitudes}
+        loading={loadingSolicitudes}
+        onRefresh={loadSolicitudes}
+        onOpenResetPasswordForUser={(sol) => {
+          const found = usuarios.find(
+            (u) => u.id_usuario === sol.id_usuario || (u.email && u.email.toLowerCase() === sol.email?.toLowerCase())
+          );
+          setUserForPasswordReset(
+            found || {
+              id_usuario: sol.id_usuario,
+              nombreCompleto: sol.nombre_completo,
+              nombre_completo: sol.nombre_completo,
+              email: sol.email,
+              ci_codigo: sol.ci_codigo,
+              rol: sol.rol,
+            }
+          );
+        }}
       />
     </div>
   );

@@ -24,38 +24,113 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _requestPasswordReset() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty || !email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Ingresa tu correo institucional para solicitar el reinicio.',
+    final currentEmail = _emailController.text.trim();
+    final resetEmailController = TextEditingController(text: currentEmail);
+
+    final String? emailToSubmit = await showDialog<String>(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.lock_reset, color: Color(0xFF2563EB)),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '¿Olvidaste tu contraseña?',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
-        ),
-      );
-      return;
-    }
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Ingresa tu correo institucional registrado para notificar al administrador. '
+                'El encargado actualizará tu contraseña desde el panel administrativo.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: resetEmailController,
+                keyboardType: TextInputType.emailAddress,
+                autofocus: currentEmail.isEmpty,
+                decoration: InputDecoration(
+                  labelText: 'Correo electrónico',
+                  hintText: 'usuario@institucion.gob.bo',
+                  prefixIcon: const Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(null),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final email = resetEmailController.text.trim();
+                if (email.isEmpty || !email.contains('@')) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Por favor ingresa un correo electrónico válido.'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.of(dialogCtx).pop(email);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Enviar Solicitud'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (emailToSubmit == null || !mounted) return;
+
     setState(() => _isRequestingReset = true);
     try {
-      await ref
+      final message = await ref
           .read(authRepositoryProvider)
-          .createPasswordResetRequest(email: email);
+          .createPasswordResetRequest(email: emailToSubmit);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Solicitud enviada. Un administrador atenderá tu reinicio de contraseña.',
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(child: Text(message)),
+              ],
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: Colors.green.shade700,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
+        final errorMsg =
+            e.toString().replaceFirst(RegExp(r'^(Exception|AuthException):\s*'), '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('No se pudo enviar la solicitud: $e'),
+            content: Text(errorMsg),
             backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 4),
           ),
         );
       }

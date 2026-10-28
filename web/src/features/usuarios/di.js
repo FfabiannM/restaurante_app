@@ -10,6 +10,9 @@ import { GetFamiliaresByUsuarioUseCase } from './domain/usecases/GetFamiliaresBy
 import { RegisterFamiliarUseCase } from './domain/usecases/RegisterFamiliarUseCase';
 import { DeleteFamiliarUseCase } from './domain/usecases/DeleteFamiliarUseCase';
 
+import { GetSolicitudesRecuperacionUseCase } from './domain/usecases/GetSolicitudesRecuperacionUseCase';
+import { CambiarPasswordUsuarioUseCase } from './domain/usecases/CambiarPasswordUsuarioUseCase';
+
 /**
  * Composition Root / Contenedor de Inyección de Dependencias para el Módulo de Usuarios
  */
@@ -20,7 +23,10 @@ export const getUsuariosUseCase = new GetUsuariosUseCase(usuarioRepository);
 export const registerUsuarioUseCase = new RegisterUsuarioUseCase(usuarioRepository);
 export const toggleUsuarioEstadoUseCase = new ToggleUsuarioEstadoUseCase(usuarioRepository);
 export const deleteUsuarioUseCase = new DeleteUsuarioUseCase(usuarioRepository);
+export const getSolicitudesRecuperacionUseCase = new GetSolicitudesRecuperacionUseCase(usuarioRepository);
+export const cambiarPasswordUsuarioUseCase = new CambiarPasswordUsuarioUseCase(usuarioRepository);
 
 export const getFamiliaresByUsuarioUseCase = new GetFamiliaresByUsuarioUseCase(familiarRepository);
 export const registerFamiliarUseCase = new RegisterFamiliarUseCase(familiarRepository);
 export const deleteFamiliarUseCase = new DeleteFamiliarUseCase(familiarRepository);
+

@@ -3,7 +3,9 @@ import {
   getUsuariosUseCase, 
   toggleUsuarioEstadoUseCase, 
   deleteUsuarioUseCase,
-  registerUsuarioUseCase 
+  registerUsuarioUseCase,
+  getSolicitudesRecuperacionUseCase,
+  cambiarPasswordUsuarioUseCase 
 } from '../../di';
 
 /**
@@ -15,12 +17,26 @@ import {
  */
 export function useUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
+  const [solicitudes, setSolicitudes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSolicitudes, setLoadingSolicitudes] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [actionLoadingId, setActionLoadingId] = useState(null);
+
+  const loadSolicitudes = useCallback(async () => {
+    try {
+      setLoadingSolicitudes(true);
+      const data = await getSolicitudesRecuperacionUseCase.execute();
+      setSolicitudes(data || []);
+    } catch (err) {
+      console.warn('[useUsuarios] Error al cargar solicitudes de recuperación:', err);
+    } finally {
+      setLoadingSolicitudes(false);
+    }
+  }, []);
 
   const loadUsuarios = useCallback(async () => {
     try {
@@ -38,7 +54,8 @@ export function useUsuarios() {
 
   useEffect(() => {
     loadUsuarios();
-  }, [loadUsuarios]);
+    loadSolicitudes();
+  }, [loadUsuarios, loadSolicitudes]);
 
   const toggleStatus = async (user) => {
     const nextState = !user.activo;
@@ -95,9 +112,41 @@ export function useUsuarios() {
     });
   }, [usuarios, searchTerm, roleFilter, statusFilter]);
 
+  const cambiarPassword = async (id_usuario, nuevo_password) => {
+    setActionLoadingId(id_usuario);
+    try {
+      const res = await cambiarPasswordUsuarioUseCase.execute(id_usuario, nuevo_password);
+      await loadSolicitudes(); // Actualizar estado de solicitudes atendidas
+      return res;
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Mapa de solicitudes pendientes indexado por email y por id_usuario
+  const pendingRequestsMap = useMemo(() => {
+    const map = new Map();
+    (solicitudes || []).forEach((s) => {
+      if (s.estado === 'Pendiente') {
+        const emailKey = (s.email || '').trim().toLowerCase();
+        if (emailKey) map.set(emailKey, s);
+        if (s.id_usuario) map.set(s.id_usuario, s);
+      }
+    });
+    return map;
+  }, [solicitudes]);
+
+  const pendingRequestsCount = useMemo(() => {
+    return (solicitudes || []).filter((s) => s.estado === 'Pendiente').length;
+  }, [solicitudes]);
+
   return {
     usuarios,
     filteredUsuarios,
+    solicitudes,
+    loadingSolicitudes,
+    pendingRequestsMap,
+    pendingRequestsCount,
     loading,
     error,
     searchTerm,
@@ -108,8 +157,11 @@ export function useUsuarios() {
     setStatusFilter,
     actionLoadingId,
     loadUsuarios,
+    loadSolicitudes,
+    cambiarPassword,
     toggleStatus,
     deleteUser,
     registerUser,
   };
 }
+

@@ -42,11 +42,21 @@ export class IUsuarioRepository {
   }
 
   /**
-   * Verifica unicidad de C.I., email y teléfono
-   * @param {{ ci_codigo: string, email: string, telefono: string }} params
-   * @returns {Promise<{ isCiAvailable: boolean, isEmailAvailable: boolean, isPhoneAvailable: boolean }>}
+   * Obtiene la lista de solicitudes de recuperación de contraseña
+   * @returns {Promise<Array<object>>}
    */
-  async checkUniqueness({ ci_codigo, email, telefono }) {
-    throw new Error('Método checkUniqueness() no implementado en IUsuarioRepository');
+  async getSolicitudesRecuperacion() {
+    throw new Error('Método getSolicitudesRecuperacion() no implementado en IUsuarioRepository');
+  }
+
+  /**
+   * Actualiza administrativamente la contraseña de un usuario
+   * @param {string} id_usuario
+   * @param {string} nuevo_password
+   * @returns {Promise<{ success: boolean, message: string }>}
+   */
+  async cambiarPasswordUsuario(id_usuario, nuevo_password) {
+    throw new Error('Método cambiarPasswordUsuario() no implementado en IUsuarioRepository');
   }
 }
+

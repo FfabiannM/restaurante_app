@@ -12,10 +12,12 @@ export default function UsuariosTable({
   error,
   onRetry,
   actionLoadingId,
+  pendingRequestsMap = new Map(),
   onSelectDetails,
   onToggleStatus,
   onDeleteClick,
   onManageFamiliares,
+  onRequestChangePassword,
 }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
@@ -72,17 +74,22 @@ export default function UsuariosTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-              {usuarios.map((u) => (
-                <UsuarioRow
-                  key={u.id_usuario}
-                  user={u}
-                  isLoadingAction={actionLoadingId === u.id_usuario}
-                  onSelectDetails={onSelectDetails}
-                  onToggleStatus={onToggleStatus}
-                  onDeleteClick={onDeleteClick}
-                  onManageFamiliares={onManageFamiliares}
-                />
-              ))}
+              {usuarios.map((u) => {
+                const hasPending = pendingRequestsMap?.has((u.email || '').toLowerCase()) || pendingRequestsMap?.has(u.id_usuario);
+                return (
+                  <UsuarioRow
+                    key={u.id_usuario}
+                    user={u}
+                    isLoadingAction={actionLoadingId === u.id_usuario}
+                    hasPendingPasswordRequest={Boolean(hasPending)}
+                    onSelectDetails={onSelectDetails}
+                    onToggleStatus={onToggleStatus}
+                    onDeleteClick={onDeleteClick}
+                    onManageFamiliares={onManageFamiliares}
+                    onRequestChangePassword={onRequestChangePassword}
+                  />
+                );
+              })}
             </tbody>
           </table>
         </div>

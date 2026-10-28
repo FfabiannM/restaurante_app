@@ -138,4 +138,38 @@ export class SupabaseUsuarioRepository extends IUsuarioRepository {
       throw new AppError(error.message, 'DELETE_USER_ERROR', error);
     }
   }
+
+  async getSolicitudesRecuperacion() {
+    const { data, error } = await this.client.rpc('obtener_solicitudes_recuperacion');
+    if (error) {
+      // Fallback tabla directa
+      const { data: directData, error: dirErr } = await this.client
+        .from('solicitud_recuperacion')
+        .select('*')
+        .order('fecha_solicitud', { ascending: false });
+      if (dirErr) {
+        throw new AppError(dirErr.message, 'FETCH_SOLICITUDES_ERROR', dirErr);
+      }
+      return directData || [];
+    }
+    return data || [];
+  }
+
+  async cambiarPasswordUsuario(id_usuario, nuevo_password) {
+    const { data, error } = await this.client.rpc('admin_cambiar_password_usuario', {
+      p_id_usuario: id_usuario,
+      p_nuevo_password: nuevo_password,
+    });
+
+    if (error) {
+      throw new AppError(error.message, 'CHANGE_PASSWORD_ERROR', error);
+    }
+
+    if (data && data.success === false) {
+      throw new AppError(data.message || 'Error al cambiar contraseña', 'CHANGE_PASSWORD_ERROR');
+    }
+
+    return data || { success: true, message: 'Contraseña actualizada con éxito.' };
+  }
 }
+

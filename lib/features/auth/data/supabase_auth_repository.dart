@@ -14,20 +14,33 @@ class SupabaseAuthRepository {
         : client.auth.currentSession != null;
   }
 
-  Future<void> createPasswordResetRequest({
+  Future<String> createPasswordResetRequest({
     required String email,
-    String? message,
   }) async {
     final client = SupabaseConfig.client;
     if (client == null) {
-      throw Exception(
-        'Supabase no está disponible para registrar la solicitud.',
-      );
+      return 'Modo demo: Solicitud registrada para $email.';
     }
-    await client.from('password_reset_requests').insert({
-      'email': email.trim().toLowerCase(),
-      'message': message?.trim().isEmpty == true ? null : message?.trim(),
-    });
+
+    final cleanEmail = email.trim().toLowerCase();
+    try {
+      final res = await client.rpc('solicitar_recuperacion_contrasena', params: {
+        'p_email': cleanEmail,
+      });
+
+      if (res is Map) {
+        if (res['success'] == true) {
+          return res['message']?.toString() ??
+              'Solicitud registrada. El administrador atenderá su cambio de contraseña.';
+        } else {
+          throw Exception(res['message']?.toString() ?? 'Error al solicitar el reinicio.');
+        }
+      }
+      return 'Solicitud registrada correctamente.';
+    } catch (e) {
+      debugPrint('⚠️ Error en createPasswordResetRequest: $e');
+      rethrow;
+    }
   }
 
   static final UserProfile demoEmpleado = UserProfile(
