@@ -277,7 +277,6 @@ export default function UsuarioDetailsModal({
                   className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-hidden transition"
                 >
                   <option value="Empleado">Empleado (Beneficiario)</option>
-                  <option value="Institucion">Institución (Consulta)</option>
                   <option value="Administrador">Administrador (Total)</option>
                 </select>
               </div>
